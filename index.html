@@ -3,20 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recursive Automaton Engine V2.4</title>
+    <title>Recursive Automaton Engine V3.0</title>
     <style>
         :root {
             --bg: #0f172a;
             --panel: #1e293b;
-            --accent: #6366f1;
-            --accent-hover: #4f46e5;
             --text: #f8fafc;
             --muted: #94a3b8;
             --border: #334155;
             --spawn: #3b82f6; /* Blue */
             --kill: #ef4444;  /* Red */
-            --disabled: #475569;
-            --center-marker: #22c55e; /* Green for the "Decider" pixel */
+            --run: #22c55e;   /* Green */
+            --center-marker: rgba(255, 255, 255, 0.3);
         }
 
         body {
@@ -40,22 +38,19 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            z-index: 10;
         }
 
-        h1 { margin: 0; font-size: 1.1rem; color: var(--accent); letter-spacing: -0.5px; }
+        h1 { margin: 0; font-size: 1.1rem; color: var(--spawn); letter-spacing: -0.5px; }
 
         .global-controls { display: flex; gap: 15px; align-items: center; }
-
         .control-group {
             display: flex; align-items: center; gap: 8px;
             background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 4px;
         }
-
-        input[type="range"] { width: 100px; accent-color: var(--accent); }
+        input[type="range"] { width: 100px; accent-color: var(--spawn); }
         label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: bold; }
 
-        /* --- MAIN LAYOUT --- */
+        /* --- LAYOUT --- */
         .workspace {
             display: flex;
             flex: 1;
@@ -74,12 +69,12 @@
 
         #worldCanvas {
             image-rendering: pixelated;
-            box-shadow: 0 0 50px rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 50px rgba(59, 130, 246, 0.1);
             width: 95%; height: 95%; object-fit: contain; 
         }
 
         .logic-stack {
-            width: 440px;
+            width: 500px;
             background: var(--bg);
             border-left: 1px solid var(--border);
             display: flex;
@@ -91,9 +86,7 @@
             padding: 15px;
             background: var(--panel);
             border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            display: flex; justify-content: space-between; align-items: center;
         }
 
         .stack-scroll-area {
@@ -102,106 +95,127 @@
             padding: 15px;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
         }
 
-        /* --- RULE CARD --- */
+        /* --- CARDS --- */
         .rule-card {
             background: var(--panel);
             border: 1px solid var(--border);
-            border-left: 4px solid var(--muted);
             border-radius: 6px;
-            padding: 10px;
-            transition: opacity 0.2s;
+            padding: 12px;
+            position: relative;
+            transition: all 0.2s;
         }
-
-        /* Dynamic border color based on center pixel logic */
-        .rule-card.center-on { border-left-color: var(--spawn); }
-        .rule-card.center-off { border-left-color: var(--kill); }
-        .rule-card.is-disabled { opacity: 0.5; filter: grayscale(0.8); border-left-color: var(--disabled); }
+        /* Active State Colors */
+        .rule-card[data-active="true"] { border-left: 4px solid var(--spawn); }
+        .rule-card[data-active="false"] { border-left: 4px solid var(--muted); opacity: 0.6; }
 
         .card-header {
             display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 10px; padding-bottom: 8px;
+            margin-bottom: 12px; padding-bottom: 8px;
             border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
-        .card-title { font-weight: 700; font-size: 0.85rem; color: var(--text); }
-        
-        .rule-body { display: flex; gap: 15px; }
+        .super-io-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+        }
 
-        .physics-col { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .grid-label {
+            font-size: 0.65rem; color: var(--muted); text-align: center; 
+            margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;
+        }
+
+        .canvas-wrapper { display: flex; flex-direction: column; align-items: center; }
         
+        .arrow-large { font-size: 20px; color: var(--muted); opacity: 0.5; }
+
         .physics-canvas {
             border: 1px solid var(--border);
-            cursor: crosshair;
             background: #000;
             width: 90px; height: 90px;
+            image-rendering: pixelated;
+            cursor: pointer;
         }
-        
-        .sub-col { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+        .physics-canvas:hover { border-color: var(--spawn); }
+
+        /* --- SUB RULES --- */
+        .sub-col {
+            display: flex; flex-direction: column; gap: 8px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
 
         .sub-rule-item {
-            display: flex; align-items: center; gap: 8px;
-            background: rgba(0,0,0,0.2); padding: 6px; border-radius: 4px;
-            border: 1px solid transparent;
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255,255,255,0.03);
+            padding: 8px;
+            border-radius: 4px;
+            border-left: 2px solid transparent;
         }
-        .sub-rule-item.center-on { border-left: 2px solid var(--spawn); }
-        .sub-rule-item.center-off { border-left: 2px solid var(--kill); }
-        .sub-rule-item.disabled { opacity: 0.4; }
+        .sub-rule-item[data-active="true"] { border-left-color: var(--spawn); }
+        .sub-rule-item[data-active="false"] { border-left-color: var(--muted); opacity: 0.5; }
 
         .sub-canvas {
-            border: 1px solid #555; cursor: pointer;
-            width: 36px; height: 36px; 
-            image-rendering: pixelated;
+            width: 36px; height: 36px;
+            border: 1px solid #444;
             background: #000;
+            cursor: pointer;
+            image-rendering: pixelated;
         }
         .sub-canvas:hover { border-color: #fff; }
 
-        /* Buttons & Toggles */
+        /* --- BUTTONS --- */
         button {
-            padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border);
+            padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
             background: var(--panel); color: var(--text); cursor: pointer;
-            font-size: 0.8rem; transition: all 0.1s;
+            font-size: 0.75rem; font-weight: 600;
         }
         button:hover { background: var(--border); }
-        button.primary { background: var(--accent); border-color: var(--accent); }
-        button.primary:hover { background: var(--accent-hover); }
-        button.danger { border-color: var(--kill); color: var(--kill); }
         
-        .icon-btn { padding: 2px 6px; font-size: 1rem; color: var(--muted); background: transparent; border: none; }
-        .icon-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+        .btn-primary { background: var(--spawn); border-color: var(--spawn); color: white; }
+        .btn-primary:hover { filter: brightness(1.1); }
         
-        .mini-btn { font-size: 0.7rem; padding: 2px 5px; }
+        .btn-danger { color: var(--kill); border-color: rgba(239, 68, 68, 0.3); }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
 
-        .status-btn { width: 60px; font-weight: bold; }
-        .status-btn.running { background: rgba(34, 197, 94, 0.2); color: #22c55e; border-color: #22c55e; }
-        .status-btn.paused { background: rgba(250, 204, 21, 0.2); color: #facc15; border-color: #facc15; }
+        .btn-action { width: 60px; }
+        .btn-action.stop { background: rgba(239, 68, 68, 0.2); color: var(--kill); border-color: var(--kill); }
+        .btn-action.start { background: rgba(34, 197, 94, 0.2); color: var(--run); border-color: var(--run); }
 
-        .power-btn { font-size: 1.1rem; padding: 0 5px; cursor: pointer; border: none; background: none; color: #475569; transition: color 0.2s; }
-        .power-btn:hover { color: #fff; }
-        .power-btn.on { color: var(--accent); text-shadow: 0 0 8px rgba(99, 102, 241, 0.4); }
+        .power-btn { 
+            background: none; border: none; font-size: 1.2rem; padding: 0 5px; color: var(--muted);
+        }
+        .power-btn:hover { color: #fff; background: none; }
+        .power-btn.on { color: var(--spawn); text-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
+
+        .tool-row { display: flex; gap: 4px; margin-top: 4px; }
 
     </style>
 </head>
 <body>
 
     <header>
-        <div style="display:flex; flex-direction:column; justify-content:center;">
-            <h1>Recursive Automaton v2.4</h1>
-        </div>
+        <h1>Recursive Automaton V3.0</h1>
         
         <div class="global-controls">
             <div class="control-group">
                 <label>Speed</label>
                 <input type="range" id="speedSlider" min="1" max="60" value="30">
-                <span id="fpsDisplay" style="font-size: 0.8rem; width: 20px;">30</span>
+                <span id="fpsDisplay">30</span>
             </div>
             <div class="control-group">
-                <button id="globalPauseBtn" class="status-btn running">Run</button>
-                <button onclick="world.randomize()">Rnd Canvas</button>
-                <button onclick="world.grid.fill(0)">Clear</button>
-                <button onclick="totalChaos()" class="danger">Total Chaos</button>
+                <button id="globalPauseBtn" class="btn-action stop">STOP</button>
+                <button onclick="world.randomize()">RND WORLD</button>
+                <button onclick="world.grid.fill(0)">CLEAR</button>
+                <button onclick="totalChaos()" class="btn-danger">CHAOS</button>
             </div>
         </div>
     </header>
@@ -213,21 +227,21 @@
 
         <div class="logic-stack">
             <div class="stack-header">
-                <span>Super Rules (Laws of Physics)</span>
-                <button class="primary" onclick="addSuperRule()">+ New Law</button>
+                <span style="font-weight:bold; color:var(--muted)">PHYSICS LAWS</span>
+                <button class="btn-primary" onclick="addSuperRule()">+ NEW LAW</button>
             </div>
             <div id="rulesContainer" class="stack-scroll-area"></div>
         </div>
     </div>
 
     <script>
+        /* --- CONFIG --- */
         const WORLD_W = 200; 
         const WORLD_H = 120;
         const PHYS_SIZE = 9;
-        const PHYS_CENTER = 4; // Center index (0-8)
         const SUB_SIZE = 3;
-        const SUB_CENTER = 1; // Center index (0-2)
 
+        /* --- DATA STRUCTURES --- */
         class Grid {
             constructor(w, h) {
                 this.w = w; this.h = h;
@@ -249,444 +263,436 @@
             swap() {
                 let temp = this.data; this.data = this.next; this.next = temp; this.next.fill(0); 
             }
-            // Check if center pixel is active
-            getCenter() {
-                const cx = Math.floor(this.w / 2);
-                const cy = Math.floor(this.h / 2);
-                return this.get(cx, cy);
-            }
         }
 
         class SubRule {
             constructor() {
-                this.grid = new Grid(SUB_SIZE, SUB_SIZE);
                 this.id = Math.random().toString(36).substr(2, 9);
                 this.active = true;
+                this.input = new Grid(SUB_SIZE, SUB_SIZE);  // Condition
+                this.output = new Grid(SUB_SIZE, SUB_SIZE); // Result
             }
         }
 
         class SuperRule {
             constructor(id) {
                 this.id = id;
+                this.active = true;
+                this.paused = false;
+                
+                // The "Brain" (Condition) - Evolves based on SubRules
                 this.physics = new Grid(PHYS_SIZE, PHYS_SIZE);
+                
+                // The "Stamp" (Result) - Static output applied to World
+                this.output = new Grid(PHYS_SIZE, PHYS_SIZE);
+                
                 this.subRules = []; 
-                this.paused = false; // Freeze physics evolution
-                this.active = true;  // Entire rule on/off
             }
 
-            step() {
-                if (!this.active) return;
+            // Evolve the Physics Grid (The "Brain")
+            stepPhysics() {
+                if (!this.active || this.paused) return;
 
                 const g = this.physics;
-                g.next.set(g.data); // Memory
-
-                if (!this.paused) {
-                    // Logic: Evolve the Physics Grid based on SubRules
-                    // We iterate over the physics grid and treat SubRules as CA rules
-                    for (let py = 0; py < g.h; py++) {
-                        for (let px = 0; px < g.w; px++) {
+                // Standard CA Logic: Write to Next, then Swap
+                
+                for (let py = 0; py < g.h; py++) {
+                    for (let px = 0; px < g.w; px++) {
+                        
+                        this.subRules.forEach(sub => {
+                            if(!sub.active) return;
                             
-                            let spawnVote = false;
-                            let killVote = false;
+                            // Check Match (Input)
+                            let match = true;
+                            let hasInput = false;
 
-                            this.subRules.forEach(sub => {
-                                if(!sub.active) return;
-                                
-                                // CA Logic: Check if neighbors match SubRule mask
-                                let match = true;
-                                const ruleCenterOp = sub.grid.getCenter(); // 1 = Spawn, 0 = Kill
-
-                                // Compare 3x3 Pattern
-                                for (let sy = 0; sy < SUB_SIZE; sy++) {
-                                    for (let sx = 0; sx < SUB_SIZE; sx++) {
-                                        // Skip center (that's the operator)
-                                        if (sx === SUB_CENTER && sy === SUB_CENTER) continue;
-
-                                        const rulePixel = sub.grid.get(sx, sy, false);
-                                        // If rule has a pixel, physics grid MUST have a pixel (Mask Match)
-                                        if (rulePixel === 1) {
-                                            // Offset -1 to 1 relative to current px, py
-                                            const targetVal = g.get(px + (sx-1), py + (sy-1), true);
-                                            if (targetVal === 0) {
-                                                match = false;
-                                                break;
-                                            }
+                            for (let sy = 0; sy < SUB_SIZE; sy++) {
+                                for (let sx = 0; sx < SUB_SIZE; sx++) {
+                                    const ruleVal = sub.input.get(sx, sy, false);
+                                    if (ruleVal === 1) {
+                                        hasInput = true;
+                                        // Offset relative to current pixel
+                                        const ox = sx - 1; 
+                                        const oy = sy - 1;
+                                        if (g.get(px + ox, py + oy) === 0) {
+                                            match = false; break;
                                         }
                                     }
-                                    if(!match) break;
                                 }
+                                if(!match) break;
+                            }
 
-                                if (match) {
-                                    if (ruleCenterOp === 1) spawnVote = true;
-                                    else killVote = true;
+                            // Apply Result (Output)
+                            if (match && hasInput) {
+                                for (let sy = 0; sy < SUB_SIZE; sy++) {
+                                    for (let sx = 0; sx < SUB_SIZE; sx++) {
+                                        if (sub.output.get(sx, sy, false) === 1) {
+                                            const ox = sx - 1;
+                                            const oy = sy - 1;
+                                            // Write to NEXT grid
+                                            const tx = (px + ox + g.w) % g.w;
+                                            const ty = (py + oy + g.h) % g.h;
+                                            g.next[ty * g.w + tx] = 1; 
+                                        }
+                                    }
                                 }
-                            });
-
-                            // Apply Votes (Kill takes priority)
-                            if (killVote) g.next[py*g.w + px] = 0;
-                            else if (spawnVote) g.next[py*g.w + px] = 1;
-                        }
+                            }
+                        });
                     }
                 }
                 g.swap();
             }
         }
 
-        class WorldSimulation {
+        class Simulation {
             constructor() {
-                this.grid = new Grid(WORLD_W, WORLD_H);
-                this.grid.randomize(0.1); 
+                this.world = new Grid(WORLD_W, WORLD_H);
+                this.world.randomize(0.1);
                 this.superRules = [];
                 this.paused = false;
             }
 
             addRule() {
-                const r = new SuperRule(Date.now() + Math.random());
+                const r = new SuperRule(Date.now());
+                // Default: Simple Blinker Logic
                 r.subRules.push(new SubRule());
                 this.superRules.push(r);
-                renderRulesUI();
+                renderUI();
             }
-
-            removeRule(id) {
-                this.superRules = this.superRules.filter(r => r.id != id);
-                renderRulesUI();
-            }
-
-            randomize() { this.grid.randomize(); }
 
             step() {
+                // 1. Evolve all Physics Grids (The Brains)
+                this.superRules.forEach(r => r.stepPhysics());
+
                 if (this.paused) return;
-                
-                // 1. Evolve Physics (Logic Layers)
-                this.superRules.forEach(r => r.step());
 
-                // 2. Evolve World
-                const g = this.grid;
-                for (let i = 0; i < g.data.length; i++) {
-                    let x = i % g.w;
-                    let y = Math.floor(i / g.w);
+                // 2. Evolve World based on Physics Grids
+                const w = this.world;
+                const pCenterOffset = Math.floor(PHYS_SIZE / 2);
 
-                    // Default: Memory
-                    let nextState = g.data[i];
-                    let spawnVote = false;
-                    let killVote = false;
+                for (let i = 0; i < w.data.length; i++) {
+                    let wx = i % w.w;
+                    let wy = Math.floor(i / w.w);
 
-                    // Check all Super Rules
-                    for (let r of this.superRules) {
-                        if (!r.active) continue;
+                    // Check every Super Rule
+                    this.superRules.forEach(r => {
+                        if (!r.active) return;
 
-                        // CA Logic: Check if World 9x9 matches Rule 9x9 mask
+                        // Check 9x9 Match: World vs Rule.Physics
                         let match = true;
-                        const ruleCenterOp = r.physics.getCenter(); // 1 = Spawn, 0 = Kill
-
-                        // We only check pixels that are ON in the rule grid (Optimization)
-                        // If Rule is empty, it shouldn't trigger anything generally, unless 
-                        // we define empty rule as "always match"? Let's assume Mask Match requires active pixels.
-                        // Actually, if rule is totally empty, it matches "everything" but result is 0 (kill) or 0 (spawn)?
-                        // Let's iterate the Rule Grid.
-                        
-                        let activePixelsInRule = 0;
+                        let hasStructure = false;
 
                         for(let ry = 0; ry < PHYS_SIZE; ry++) {
                             for(let rx = 0; rx < PHYS_SIZE; rx++) {
-                                if (rx === PHYS_CENTER && ry === PHYS_CENTER) continue;
-
-                                const rulePixel = r.physics.get(rx, ry, false);
-                                if (rulePixel === 1) {
-                                    activePixelsInRule++;
-                                    // Map rule coordinate (0..8) to world offset (-4..4)
-                                    const ox = rx - PHYS_CENTER;
-                                    const oy = ry - PHYS_CENTER;
+                                const pVal = r.physics.get(rx, ry, false);
+                                if (pVal === 1) {
+                                    hasStructure = true;
+                                    const ox = rx - pCenterOffset;
+                                    const oy = ry - pCenterOffset;
                                     
-                                    if (g.get(x + ox, y + oy) === 0) {
-                                        match = false;
-                                        break;
+                                    if (w.get(wx + ox, wy + oy) === 0) {
+                                        match = false; break;
                                     }
                                 }
                             }
                             if(!match) break;
                         }
 
-                        // Special case: If rule is purely blank (except maybe center), do we trigger?
-                        // "Mask Match" usually implies if bits are set. 
-                        // Let's require at least 1 neighbor bit set in rule for stability, 
-                        // OR just respect the match. A blank rule matches everything.
-                        // If blank rule has center 0 -> Kills everything. 
-                        // If blank rule has center 1 -> Spawns everything (Flashbang).
-                        // Valid logic.
-
-                        if (match) {
-                            if (ruleCenterOp === 1) spawnVote = true;
-                            else killVote = true;
+                        // If Match found, Stamp Rule.Output onto World.Next
+                        if (match && hasStructure) {
+                            for(let ry = 0; ry < PHYS_SIZE; ry++) {
+                                for(let rx = 0; rx < PHYS_SIZE; rx++) {
+                                    if (r.output.get(rx, ry, false) === 1) {
+                                        const ox = rx - pCenterOffset;
+                                        const oy = ry - pCenterOffset;
+                                        const tx = (wx + ox + w.w) % w.w;
+                                        const ty = (wy + oy + w.h) % w.h;
+                                        w.next[ty * w.w + tx] = 1;
+                                    }
+                                }
+                            }
                         }
-                    }
-
-                    if (killVote) nextState = 0;
-                    else if (spawnVote) nextState = 1;
-
-                    g.next[i] = nextState;
+                    });
                 }
-                g.swap();
+                w.swap();
             }
         }
 
-        // --- GLOBAL STATE ---
-        const world = new WorldSimulation();
-        let r1 = new SuperRule(1); 
-        // Create a simple glider-like rule or noise rule
-        r1.physics.set(PHYS_CENTER, PHYS_CENTER, 1); // Center White = Spawn Rule
-        r1.physics.set(PHYS_CENTER-1, PHYS_CENTER, 1); // Left neighbor required
-        let s1 = new SubRule(); 
-        s1.grid.set(1, 1, 1); // Center White = Adder
-        s1.grid.set(0, 1, 1); // Left neighbor
+        /* --- GLOBAL STATE --- */
+        const sim = new Simulation();
+        
+        // Initial Setup
+        const r1 = new SuperRule(1);
+        r1.physics.set(4, 4, 1); r1.physics.set(3, 4, 1); // Condition: Center + Left
+        r1.output.set(4, 4, 1); r1.output.set(5, 4, 1);   // Result: Center + Right (Move Right)
+        
+        const s1 = new SubRule();
+        s1.input.set(1, 1, 1); // If Center...
+        s1.output.set(2, 1, 1); // Write Right (Physics glides right)
         r1.subRules.push(s1);
-        world.superRules.push(r1);
+        
+        sim.superRules.push(r1);
 
-        const worldCanvas = document.getElementById('worldCanvas');
-        const worldCtx = worldCanvas.getContext('2d');
+        /* --- RENDERER --- */
         let fps = 30;
         let lastTime = 0;
+        const ctx = document.getElementById('worldCanvas').getContext('2d');
 
-        // --- INTERACTION ---
+        // Draw Helper
+        function drawGrid(ctx, grid, color, showGrid=false) {
+            const w = grid.w; const h = grid.h;
+            const cvs = ctx.canvas;
+            ctx.fillStyle = '#000'; ctx.fillRect(0,0,cvs.width,cvs.height);
+            
+            const cw = cvs.width / w;
+            const ch = cvs.height / h;
+
+            for(let y=0; y<h; y++) {
+                for(let x=0; x<w; x++) {
+                    const val = grid.data[y*w+x];
+                    
+                    if(showGrid) {
+                        ctx.strokeStyle = '#222'; ctx.lineWidth=0.5;
+                        ctx.strokeRect(x*cw, y*ch, cw, ch);
+                    }
+
+                    if(val === 1) {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(x*cw, y*ch, cw, ch);
+                    }
+                    
+                    // Center Marker
+                    if(showGrid && x === Math.floor(w/2) && y === Math.floor(h/2)) {
+                        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                        ctx.strokeRect(x*cw+1, y*ch+1, cw-2, ch-2);
+                    }
+                }
+            }
+        }
+
+        /* --- INPUT HANDLING --- */
         let isDrawing = false;
-        let drawMode = 1;
+        let drawVal = 1;
 
-        function setupCanvasInput(canvas, gridGetter, redrawCallback) {
-            const getCoords = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = rect.width / gridGetter().w;
-                const scaleY = rect.height / gridGetter().h;
-                const x = Math.floor((e.clientX - rect.left) / scaleX);
-                const y = Math.floor((e.clientY - rect.top) / scaleY);
-                return {x, y};
-            }
+        function attachInput(canvas, gridGetter, color) {
+            if(canvas.getAttribute('data-bound')) return;
+            canvas.setAttribute('data-bound', 'true');
+
             const paint = (e) => {
-                const {x, y} = getCoords(e);
-                gridGetter().set(x, y, drawMode);
-                // Call the specific redraw logic for this canvas type
-                if(redrawCallback) redrawCallback();
+                const rect = canvas.getBoundingClientRect();
+                const g = gridGetter();
+                const x = Math.floor((e.clientX - rect.left) / (rect.width/g.w));
+                const y = Math.floor((e.clientY - rect.top) / (rect.height/g.h));
+                g.set(x, y, drawVal);
                 
-                // If it's the physics or sub grid, we should update UI classes (border colors)
-                if(!world.paused) renderRulesUI(); // Heavy? Maybe only on mouseup. 
-            }
+                // Immediate local redraw
+                drawGrid(canvas.getContext('2d'), g, color, true);
+            };
+
             canvas.addEventListener('mousedown', (e) => {
                 isDrawing = true;
-                const {x, y} = getCoords(e);
-                const currentVal = gridGetter().get(x, y, false);
-                drawMode = currentVal === 1 ? 0 : 1;
+                const rect = canvas.getBoundingClientRect();
+                const g = gridGetter();
+                const x = Math.floor((e.clientX - rect.left) / (rect.width/g.w));
+                const y = Math.floor((e.clientY - rect.top) / (rect.height/g.h));
+                drawVal = g.get(x, y, false) === 1 ? 0 : 1;
                 paint(e);
             });
             canvas.addEventListener('mousemove', (e) => { if(isDrawing) paint(e); });
-            canvas.addEventListener('mouseup', () => { 
-                isDrawing = false; 
-                renderRulesUI(); // Update UI borders on release
-            });
-            canvas.addEventListener('mouseleave', () => isDrawing = false);
+            window.addEventListener('mouseup', () => isDrawing = false);
         }
 
-        setupCanvasInput(worldCanvas, () => world.grid, () => {
-             if(world.paused) drawGrid(worldCtx, world.grid, WORLD_W, WORLD_H, '#6366f1');
-        });
+        attachInput(document.getElementById('worldCanvas'), () => sim.world, '#3b82f6');
 
-        // --- UI ---
-        function renderRulesUI() {
-            const container = document.getElementById('rulesContainer');
+        /* --- UI GENERATION --- */
+        const container = document.getElementById('rulesContainer');
+
+        function renderUI() {
+            // Smart update: Only recreate if counts mismatch, otherwise update classes
+            // For simplicity in this demo, we verify ID existence.
             
-            // Rebuilding UI invalidates event listeners, which breaks drag-painting if done continuously.
-            // We need to only rebuild if structure changed, or just update classes.
-            // For simplicity in this v2.4, we rebuild, but painting relies on existing canvas ref if possible?
-            // No, rebuilding destroys canvas. 
-            // FIX: We only rebuild if length changes? No, we need to update IDs.
-            // Hack: We won't rebuild inner HTML if we are dragging.
-            if(isDrawing) return;
-
-            const currentScroll = container.scrollTop;
-            container.innerHTML = '';
-
-            world.superRules.forEach((rule, index) => {
-                const card = document.createElement('div');
-                const centerVal = rule.physics.getCenter();
-                const centerClass = centerVal === 1 ? 'center-on' : 'center-off';
-                const disabledClass = rule.active ? '' : 'is-disabled';
+            sim.superRules.forEach((r, idx) => {
+                let card = document.getElementById(`card-${r.id}`);
                 
-                card.className = `rule-card ${centerClass} ${disabledClass}`;
-                
-                const pauseText = rule.paused ? 'Paused' : 'Running';
-                const pauseClass = rule.paused ? 'paused' : 'running';
-                const powerClass = rule.active ? 'on' : 'off';
-
-                card.innerHTML = `
-                    <div class="card-header">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <button class="power-btn ${powerClass}" title="Power" onclick="toggleRuleActive(${rule.id})">⏻</button>
-                            <div class="card-title">Rule ${index+1}</div>
-                        </div>
-                        <div style="display:flex; gap:5px; align-items:center;">
-                             <button class="mini-btn ${pauseClass}" style="width:50px" onclick="toggleRulePause(${rule.id})">${pauseText}</button>
-                             <button class="icon-btn" style="color:#ef4444" onclick="world.removeRule(${rule.id})">×</button>
-                        </div>
-                    </div>
-                    <div class="rule-body">
-                        <div class="physics-col">
-                            <canvas id="phys-${rule.id}" class="physics-canvas" width="90" height="90"></canvas>
-                            <div class="btn-row">
-                                <button class="mini-btn" onclick="clearRule(${rule.id})">Clr</button>
-                                <button class="mini-btn" onclick="randomizeRule(${rule.id})">Rnd</button>
+                // CREATE CARD IF MISSING
+                if(!card) {
+                    card = document.createElement('div');
+                    card.id = `card-${r.id}`;
+                    card.className = 'rule-card';
+                    card.innerHTML = `
+                        <div class="card-header">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <button class="power-btn" id="pwr-${r.id}" onclick="toggleActive(${r.id})">⏻</button>
+                                <span style="font-weight:bold; font-size:0.9rem">LAW ${idx+1}</span>
+                            </div>
+                            <div style="display:flex; gap:5px;">
+                                <button id="play-${r.id}" class="btn-action stop" onclick="togglePause(${r.id})">STOP</button>
+                                <button class="btn-danger" style="width:25px" onclick="removeRule(${r.id})">×</button>
                             </div>
                         </div>
-                        <div class="sub-col" id="sub-${rule.id}">
-                            <button style="margin-top:auto; font-size:0.8rem; width:100%" onclick="addSubRule(${rule.id})">+ Logic</button>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
 
-                // Setup Physics Canvas
-                const pCan = document.getElementById(`phys-${rule.id}`);
-                setupCanvasInput(pCan, () => rule.physics, () => {
-                    const color = rule.active ? (rule.physics.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                    drawGrid(pCan.getContext('2d'), rule.physics, PHYS_SIZE, PHYS_SIZE, color, true);
-                });
-                const pColor = rule.active ? (rule.physics.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                drawGrid(pCan.getContext('2d'), rule.physics, PHYS_SIZE, PHYS_SIZE, pColor, true);
-
-                // Sub Rules
-                const subContainer = document.getElementById(`sub-${rule.id}`);
-                const addBtn = subContainer.lastElementChild;
-
-                rule.subRules.forEach((sub) => {
-                    const item = document.createElement('div');
-                    const subCenterVal = sub.grid.getCenter();
-                    const subCenterClass = subCenterVal === 1 ? 'center-on' : 'center-off';
-                    
-                    item.className = `sub-rule-item ${sub.active ? subCenterClass : 'disabled'}`;
-                    const subPower = sub.active ? 'on' : 'off';
-
-                    item.innerHTML = `
-                        <canvas id="subc-${sub.id}" class="sub-canvas" width="${SUB_SIZE}" height="${SUB_SIZE}"></canvas>
-                        <div style="flex:1; display:flex; flex-direction:column; gap:4px; align-items: flex-start;">
-                            <div style="font-size:0.7rem; color:#888;">Logic</div>
-                            <div style="display:flex; gap:2px;">
-                                <button class="mini-btn" onclick="randomizeSub(${rule.id}, '${sub.id}')">Rnd</button>
-                                <button class="power-btn ${subPower}" style="font-size:0.9rem" onclick="toggleSubActive(${rule.id}, '${sub.id}')">⏻</button>
+                        <div class="super-io-row">
+                            <div class="canvas-wrapper">
+                                <div class="grid-label">CONDITION (BRAIN)</div>
+                                <canvas id="phys-${r.id}" class="physics-canvas" width="90" height="90"></canvas>
+                                <div class="tool-row">
+                                    <button onclick="clearGrid(${r.id}, 'phys')">CLR</button>
+                                    <button onclick="rndGrid(${r.id}, 'phys')">RND</button>
+                                </div>
+                            </div>
+                            <div class="arrow-large">➜</div>
+                            <div class="canvas-wrapper">
+                                <div class="grid-label">RESULT (STAMP)</div>
+                                <canvas id="out-${r.id}" class="physics-canvas" width="90" height="90"></canvas>
+                                <div class="tool-row">
+                                    <button onclick="clearGrid(${r.id}, 'out')">CLR</button>
+                                    <button onclick="fillGrid(${r.id}, 'out')">FILL</button>
+                                </div>
                             </div>
                         </div>
-                        <button class="icon-btn" onclick="removeSubRule(${rule.id}, '${sub.id}')">×</button>
+
+                        <div class="sub-col" id="subs-${r.id}"></div>
+                        <button style="width:100%; margin-top:10px; opacity:0.7" onclick="addSub(${r.id})">+ ADD LOGIC</button>
                     `;
-                    subContainer.insertBefore(item, addBtn);
-                    
-                    const sCan = document.getElementById(`subc-${sub.id}`);
-                    setupCanvasInput(sCan, () => sub.grid, () => {
-                        const sColor = sub.active ? (sub.grid.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                        drawGrid(sCan.getContext('2d'), sub.grid, SUB_SIZE, SUB_SIZE, sColor, true);
-                    });
-                    const sColor = sub.active ? (sub.grid.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                    drawGrid(sCan.getContext('2d'), sub.grid, SUB_SIZE, SUB_SIZE, sColor, true);
+                    container.appendChild(card);
+
+                    // Bind Canvases
+                    attachInput(document.getElementById(`phys-${r.id}`), () => r.physics, '#3b82f6');
+                    attachInput(document.getElementById(`out-${r.id}`), () => r.output, '#22c55e');
+                }
+
+                // UPDATE STATE VISUALS
+                card.setAttribute('data-active', r.active);
+                document.getElementById(`pwr-${r.id}`).className = `power-btn ${r.active ? 'on' : ''}`;
+                const playBtn = document.getElementById(`play-${r.id}`);
+                playBtn.className = `btn-action ${r.paused ? 'start' : 'stop'}`;
+                playBtn.innerText = r.paused ? 'START' : 'STOP';
+
+                // SUB RULES RENDER
+                const subContainer = document.getElementById(`subs-${r.id}`);
+                
+                // Cleanup deleted
+                Array.from(subContainer.children).forEach(el => {
+                    const sid = el.id.split('-')[1];
+                    if(!r.subRules.find(s => s.id == sid)) el.remove();
+                });
+
+                r.subRules.forEach(s => {
+                    let subEl = document.getElementById(`sub-${s.id}`);
+                    if(!subEl) {
+                        subEl = document.createElement('div');
+                        subEl.id = `sub-${s.id}`;
+                        subEl.className = 'sub-rule-item';
+                        subEl.innerHTML = `
+                            <button class="power-btn" id="spwr-${s.id}" onclick="toggleSub(${r.id}, '${s.id}')" style="font-size:1rem">⏻</button>
+                            <canvas id="sin-${s.id}" class="sub-canvas" width="36" height="36"></canvas>
+                            <span style="color:#666">➜</span>
+                            <canvas id="sout-${s.id}" class="sub-canvas" width="36" height="36"></canvas>
+                            <div style="flex:1"></div>
+                            <button class="btn-danger" style="padding:2px 6px" onclick="removeSub(${r.id}, '${s.id}')">×</button>
+                        `;
+                        subContainer.appendChild(subEl);
+                        attachInput(document.getElementById(`sin-${s.id}`), () => s.input, '#3b82f6');
+                        attachInput(document.getElementById(`sout-${s.id}`), () => s.output, '#3b82f6');
+                    }
+                    subEl.setAttribute('data-active', s.active);
+                    document.getElementById(`spwr-${s.id}`).className = `power-btn ${s.active ? 'on' : ''}`;
                 });
             });
-            container.scrollTop = currentScroll;
-        }
-
-        function drawGrid(ctx, grid, w, h, color, highlightCenter = false) {
-            ctx.fillStyle = '#000'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            const sw = ctx.canvas.width / w;
-            const sh = ctx.canvas.height / h;
             
-            for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const val = grid.data[y * w + x];
-                    
-                    // Highlight Center Pixel logic
-                    const isCenter = highlightCenter && x === Math.floor(w/2) && y === Math.floor(h/2);
-                    
-                    if (val === 0) {
-                        ctx.fillStyle = '#1a1a1a'; 
-                        ctx.fillRect(x * sw, y * sh, sw - 1, sh - 1);
-                    } else {
-                        ctx.fillStyle = color; 
-                        ctx.fillRect(x * sw, y * sh, sw, sh);
-                    }
-
-                    if (isCenter) {
-                        ctx.strokeStyle = 'var(--center-marker)';
-                        ctx.lineWidth = 2;
-                        ctx.strokeRect(x * sw + 1, y * sh + 1, sw - 2, sh - 2);
-                    }
-                }
-            }
-        }
-
-        // --- ACTIONS ---
-        function addSuperRule() { world.addRule(); }
-        function toggleRulePause(rid) { const r = world.superRules.find(x => x.id == rid); if(r) { r.paused = !r.paused; renderRulesUI(); } }
-        function toggleRuleActive(rid) { const r = world.superRules.find(x => x.id == rid); if(r) { r.active = !r.active; renderRulesUI(); } }
-        function clearRule(rid) { const r = world.superRules.find(x => x.id == rid); if(r) r.physics.fill(0); renderRulesUI(); }
-        function randomizeRule(rid) { const r = world.superRules.find(x => x.id == rid); if(r) r.physics.randomize(); renderRulesUI(); }
-        function addSubRule(rid) { const r = world.superRules.find(x => x.id == rid); if(r) { r.subRules.push(new SubRule()); renderRulesUI(); } }
-        function removeSubRule(rid, sid) { const r = world.superRules.find(x => x.id == rid); if(r) { r.subRules = r.subRules.filter(s => s.id !== sid); renderRulesUI(); } }
-        function toggleSubActive(rid, sid) { const r = world.superRules.find(x => x.id == rid); if(r) { const s = r.subRules.find(x => x.id == sid); if(s) { s.active = !s.active; renderRulesUI(); } } }
-        function randomizeSub(rid, sid) {
-            const r = world.superRules.find(x => x.id == rid); 
-            if(r) { 
-                const s = r.subRules.find(x => x.id == sid); 
-                if(s) { 
-                    s.grid.randomize(); 
-                    renderRulesUI();
-                } 
-            } 
-        }
-
-        function totalChaos() {
-            world.randomize();
-            world.superRules.forEach(r => {
-                r.physics.randomize();
-                r.subRules.forEach(s => s.grid.randomize());
+            // Cleanup deleted Super Rules
+            Array.from(container.children).forEach(c => {
+                const rid = c.id.split('-')[1];
+                if(!sim.superRules.find(r => r.id == rid)) c.remove();
             });
-            renderRulesUI();
         }
 
-        const speedSlider = document.getElementById('speedSlider');
-        speedSlider.addEventListener('input', (e) => { fps = parseInt(e.target.value); document.getElementById('fpsDisplay').innerText = fps; });
-        const pauseBtn = document.getElementById('globalPauseBtn');
-        pauseBtn.addEventListener('click', () => {
-            world.paused = !world.paused;
-            if(world.paused) {
-                pauseBtn.innerText = "Paused";
-                pauseBtn.classList.remove('running');
-                pauseBtn.classList.add('paused');
-            } else {
-                pauseBtn.innerText = "Run";
-                pauseBtn.classList.remove('paused');
-                pauseBtn.classList.add('running');
-            }
-        });
+        /* --- INTERACTIONS --- */
+        function toggleActive(rid) { const r = sim.superRules.find(x => x.id == rid); r.active = !r.active; renderUI(); }
+        function togglePause(rid) { const r = sim.superRules.find(x => x.id == rid); r.paused = !r.paused; renderUI(); }
+        function removeRule(rid) { sim.superRules = sim.superRules.filter(x => x.id != rid); renderUI(); }
+        
+        function clearGrid(rid, type) { 
+            const r = sim.superRules.find(x => x.id == rid); 
+            if(type === 'phys') r.physics.fill(0); else r.output.fill(0); 
+        }
+        function rndGrid(rid, type) {
+             const r = sim.superRules.find(x => x.id == rid); 
+             if(type === 'phys') r.physics.randomize(); 
+        }
+        function fillGrid(rid, type) {
+             const r = sim.superRules.find(x => x.id == rid); 
+             if(type === 'out') r.output.fill(1); 
+        }
+
+        function addSub(rid) { 
+            const r = sim.superRules.find(x => x.id == rid); 
+            r.subRules.push(new SubRule()); 
+            renderUI(); 
+        }
+        function removeSub(rid, sid) {
+            const r = sim.superRules.find(x => x.id == rid);
+            r.subRules = r.subRules.filter(s => s.id != sid);
+            renderUI();
+        }
+        function toggleSub(rid, sid) {
+            const r = sim.superRules.find(x => x.id == rid);
+            const s = r.subRules.find(x => x.id == sid);
+            s.active = !s.active;
+            renderUI();
+        }
+        function addSuperRule() { sim.addRule(); }
+        function totalChaos() {
+            sim.world.randomize();
+            sim.superRules.forEach(r => {
+                r.physics.randomize();
+                r.output.randomize();
+            });
+        }
+
+        /* --- LOOP --- */
+        document.getElementById('speedSlider').oninput = (e) => { 
+            fps = e.target.value; 
+            document.getElementById('fpsDisplay').innerText = fps; 
+        };
+
+        document.getElementById('globalPauseBtn').onclick = (e) => {
+            sim.paused = !sim.paused;
+            e.target.innerText = sim.paused ? "START" : "STOP";
+            e.target.className = `btn-action ${sim.paused ? 'start' : 'stop'}`;
+        };
 
         function loop(timestamp) {
-            if (timestamp - lastTime >= 1000 / fps) { world.step(); lastTime = timestamp; }
-            drawGrid(worldCtx, world.grid, WORLD_W, WORLD_H, '#6366f1');
-            
-            // Loop redraws for active feedback if not interacting with DOM
-            if(!isDrawing) {
-                 world.superRules.forEach(r => {
-                    const c = document.getElementById(`phys-${r.id}`);
-                    if(c) {
-                        const color = r.active ? (r.physics.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                        drawGrid(c.getContext('2d'), r.physics, PHYS_SIZE, PHYS_SIZE, color, true);
-                    }
-                    r.subRules.forEach(s => {
-                        const sc = document.getElementById(`subc-${s.id}`);
-                        if(sc) {
-                            const color = s.active ? (s.grid.getCenter() ? '#3b82f6' : '#ef4444') : '#555';
-                            drawGrid(sc.getContext('2d'), s.grid, SUB_SIZE, SUB_SIZE, color, true);
-                        }
-                    });
-                });
+            if(timestamp - lastTime >= 1000/fps) {
+                sim.step();
+                lastTime = timestamp;
             }
+            drawGrid(ctx, sim.world, '#3b82f6');
+            
+            // Draw UI Grids
+            sim.superRules.forEach(r => {
+                const pc = document.getElementById(`phys-${r.id}`);
+                if(pc) drawGrid(pc.getContext('2d'), r.physics, r.active ? '#3b82f6' : '#555', true);
+                
+                const oc = document.getElementById(`out-${r.id}`);
+                if(oc) drawGrid(oc.getContext('2d'), r.output, r.active ? '#22c55e' : '#555', true);
+
+                r.subRules.forEach(s => {
+                    const sic = document.getElementById(`sin-${s.id}`);
+                    const soc = document.getElementById(`sout-${s.id}`);
+                    if(sic && soc) {
+                        drawGrid(sic.getContext('2d'), s.input, s.active ? '#3b82f6' : '#555', true);
+                        drawGrid(soc.getContext('2d'), s.output, s.active ? '#3b82f6' : '#555', true);
+                    }
+                });
+            });
+
             requestAnimationFrame(loop);
         }
 
-        renderRulesUI();
+        renderUI();
         requestAnimationFrame(loop);
+
     </script>
 </body>
 </html>
