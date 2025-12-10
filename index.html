@@ -411,6 +411,7 @@
         let geneUpdateCounter = 0;
         let selectedHistoryIndex = 0; 
         let geneDrawMode = 1; // 1 = Draw, 0 = Erase
+        let lockMode = 0;
         
         /* --- HELPERS --- */
         function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -919,14 +920,43 @@
             const p = cam.screenToWorld(e.clientX, e.clientY);
             const x = Math.floor(p.x);
             if(x >= 0 && x < STRIP_LEN) {
-                // Determine Draw Mode based on initial click
-                if(isStart && (e.buttons === 1 || e.button === 0)) {
-                    geneDrawMode = strip.cells[x] ? 0 : 1; // Toggle: If on, mode becomes erase
+                
+                // --- 1. DETERMINE INTENTION (On Mouse Down only) ---
+                if(isStart) {
+                    if (e.shiftKey) {
+                        // Shift held: If already locked ON (1), intention is to Unlock (0). Else Lock ON (1).
+                        lockMode = (strip.locks[x] === 1) ? 0 : 1;
+                    } 
+                    else if (e.altKey || e.ctrlKey) {
+                        // Alt held: If already locked OFF (2), intention is to Unlock (0). Else Lock OFF (2).
+                        lockMode = (strip.locks[x] === 2) ? 0 : 2;
+                    } 
+                    else if (e.buttons === 1 || e.button === 0) {
+                        // Normal Click: Toggle cell on/off
+                        geneDrawMode = strip.cells[x] ? 0 : 1; 
+                    }
                 }
                 
-                if (e.shiftKey) { strip.locks[x] = 1; strip.cells[x] = 1; } 
-                else if (e.altKey || e.ctrlKey) { strip.locks[x] = 2; strip.cells[x] = 0; }
+                // --- 2. EXECUTE INTENTION (Click or Drag) ---
+                if (e.shiftKey) {
+                    // Apply the lockMode calculated at start
+                    if (lockMode === 1) {
+                        strip.locks[x] = 1; 
+                        strip.cells[x] = 1; // Force cell ON
+                    } else {
+                        strip.locks[x] = 0; // Erase lock
+                    }
+                } 
+                else if (e.altKey || e.ctrlKey) {
+                    if (lockMode === 2) {
+                        strip.locks[x] = 2; 
+                        strip.cells[x] = 0; // Force cell OFF
+                    } else {
+                        strip.locks[x] = 0; // Erase lock
+                    }
+                } 
                 else if ((e.buttons === 1 || e.button === 0) && strip.locks[x] === 0) {
+                    // Standard drawing (only if not locked)
                     strip.cells[x] = geneDrawMode;
                 }
                 
