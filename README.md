@@ -1,4 +1,4 @@
-# ⚛️ Compositional Cellular Automata Simulator
+# Cellular Automatomata: Compositional Cellular Automata Simulator
 
 ![Cellular Automata Simulator Screenshot](screenshot.png)
 
