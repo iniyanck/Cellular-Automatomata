@@ -3,694 +3,778 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recursive Automaton Engine V3.0</title>
+    <title>Wolfram-Driven 2D Automaton v2.3 (Masked)</title>
     <style>
         :root {
             --bg: #0f172a;
             --panel: #1e293b;
-            --text: #f8fafc;
-            --muted: #94a3b8;
+            --text: #94a3b8;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.4);
             --border: #334155;
-            --spawn: #3b82f6; /* Blue */
-            --kill: #ef4444;  /* Red */
-            --run: #22c55e;   /* Green */
-            --center-marker: rgba(255, 255, 255, 0.3);
+            --run: #10b981;
+            --stop: #f43f5e;
+            --warn: #f97316;
+            --lock-on: #4ade80; /* Green for force ON */
+            --lock-off: #ef4444; /* Red for force OFF */
         }
 
         body {
-            font-family: 'Segoe UI', monospace;
+            font-family: 'Segoe UI', 'Roboto', monospace;
             background: var(--bg);
             color: var(--text);
             margin: 0;
             display: flex;
-            flex-direction: column;
             height: 100vh;
             overflow: hidden;
-            user-select: none;
+            font-size: 13px;
         }
 
-        /* --- HEADER --- */
-        header {
-            flex: 0 0 50px;
-            padding: 0 20px;
+        /* --- LAYOUT --- */
+        .viewport {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            position: relative;
+        }
+
+        .controls {
+            width: 400px;
+            background: var(--bg);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+        }
+
+        /* --- COMPONENTS --- */
+        .header {
+            padding: 15px;
             background: var(--panel);
             border-bottom: 1px solid var(--border);
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
         }
 
-        h1 { margin: 0; font-size: 1.1rem; color: var(--spawn); letter-spacing: -0.5px; }
-
-        .global-controls { display: flex; gap: 15px; align-items: center; }
-        .control-group {
-            display: flex; align-items: center; gap: 8px;
-            background: rgba(0,0,0,0.2); padding: 4px 10px; border-radius: 4px;
+        .control-block {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel);
         }
-        input[type="range"] { width: 100px; accent-color: var(--spawn); }
-        label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: bold; }
 
-        /* --- LAYOUT --- */
-        .workspace {
-            display: flex;
+        h2 { margin: 0 0 12px 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #cbd5e1; }
+        
+        button {
+            background: #334155; border: 1px solid #475569; color: #e2e8f0;
+            padding: 6px 12px; cursor: pointer; border-radius: 4px;
+            font-family: inherit; transition: all 0.2s;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        button:hover { background: #475569; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+        button.primary:hover { box-shadow: 0 0 10px var(--accent-glow); }
+        
+        button.danger { background: var(--stop); border-color: var(--stop); color: white; }
+        
+        button.lock-btn { border-color: var(--lock-on); color: var(--lock-on); background: transparent; }
+        button.lock-btn:hover { background: rgba(74, 222, 128, 0.1); }
+
+        input[type="range"] { width: 100%; cursor: pointer; }
+        input[type="number"] {
+            background: #0f172a; border: 1px solid #334155; color: white;
+            padding: 4px; border-radius: 4px; width: 60px; font-family: monospace;
+        }
+        input[type="checkbox"] { cursor: pointer; }
+
+        label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+
+        /* --- CANVAS AREAS --- */
+        .world-wrapper {
             flex: 1;
-            height: calc(100vh - 50px);
-            overflow: hidden;
-        }
-
-        .world-container {
-            flex: 1;
-            background: #050505;
+            background: #020617; /* Darker slate for less harsh contrast */
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
             cursor: crosshair;
         }
 
-        #worldCanvas {
+        canvas#worldCanvas {
             image-rendering: pixelated;
-            box-shadow: 0 0 50px rgba(59, 130, 246, 0.1);
-            width: 95%; height: 95%; object-fit: contain; 
+            width: 100%; height: 100%; object-fit: contain;
         }
 
-        .logic-stack {
-            width: 500px;
-            background: var(--bg);
-            border-left: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            z-index: 5;
-        }
-
-        .stack-header {
-            padding: 15px;
-            background: var(--panel);
-            border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-
-        .stack-scroll-area {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        /* --- CARDS --- */
-        .rule-card {
-            background: var(--panel);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 12px;
+        .wolfram-display-container {
             position: relative;
-            transition: all 0.2s;
-        }
-        /* Active State Colors */
-        .rule-card[data-active="true"] { border-left: 4px solid var(--spawn); }
-        .rule-card[data-active="false"] { border-left: 4px solid var(--muted); opacity: 0.6; }
-
-        .card-header {
-            display: flex; justify-content: space-between; align-items: center;
-            margin-bottom: 12px; padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            margin-top: 10px;
+            border: 1px solid var(--border);
+            cursor: ns-resize;
         }
 
-        .super-io-row {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 15px;
-            background: rgba(0,0,0,0.2);
+        canvas#wolframCanvas {
+            width: 100%; height: 80px;
+            background: #020617;
+            image-rendering: pixelated;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* --- INSPECTOR OVERLAY --- */
+        .neighborhood-preview {
+            position: absolute;
+            bottom: 20px; left: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid var(--border);
             padding: 10px;
             border-radius: 6px;
+            pointer-events: none;
+            display: none;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
         }
-
-        .grid-label {
-            font-size: 0.65rem; color: var(--muted); text-align: center; 
-            margin-bottom: 4px; letter-spacing: 1px; font-weight: bold;
-        }
-
-        .canvas-wrapper { display: flex; flex-direction: column; align-items: center; }
         
-        .arrow-large { font-size: 20px; color: var(--muted); opacity: 0.5; }
-
-        .physics-canvas {
-            border: 1px solid var(--border);
-            background: #000;
-            width: 90px; height: 90px;
-            image-rendering: pixelated;
-            cursor: pointer;
+        .nb-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
+            margin-bottom: 5px;
         }
-        .physics-canvas:hover { border-color: var(--spawn); }
+        .nb-cell { width: 12px; height: 12px; background: #334155; }
+        .nb-cell.on { background: #bae6fd; box-shadow: 0 0 4px #bae6fd; }
+        .nb-cell.center { border: 1px solid var(--accent); }
 
-        /* --- SUB RULES --- */
-        .sub-col {
-            display: flex; flex-direction: column; gap: 8px;
-            padding-top: 10px;
-            border-top: 1px solid var(--border);
+        /* --- RULE BITS --- */
+        .rule-grid {
+            display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
+            margin-top: 15px;
         }
-
-        .sub-rule-item {
-            display: flex; align-items: center; gap: 10px;
-            background: rgba(255,255,255,0.03);
-            padding: 8px;
-            border-radius: 4px;
-            border-left: 2px solid transparent;
+        .rule-bit {
+            display: flex; flex-direction: column; align-items: center;
+            cursor: pointer; padding: 6px 2px;
+            background: rgba(255,255,255,0.03); border: 1px solid transparent; border-radius: 4px;
         }
-        .sub-rule-item[data-active="true"] { border-left-color: var(--spawn); }
-        .sub-rule-item[data-active="false"] { border-left-color: var(--muted); opacity: 0.5; }
-
-        .sub-canvas {
-            width: 36px; height: 36px;
-            border: 1px solid #444;
-            background: #000;
-            cursor: pointer;
-            image-rendering: pixelated;
-        }
-        .sub-canvas:hover { border-color: #fff; }
-
-        /* --- BUTTONS --- */
-        button {
-            padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
-            background: var(--panel); color: var(--text); cursor: pointer;
-            font-size: 0.75rem; font-weight: 600;
-        }
-        button:hover { background: var(--border); }
+        .rule-bit:hover { background: rgba(255,255,255,0.1); }
+        .rule-bit.active { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
         
-        .btn-primary { background: var(--spawn); border-color: var(--spawn); color: white; }
-        .btn-primary:hover { filter: brightness(1.1); }
+        .bit-pattern { display: flex; gap: 1px; margin-bottom: 6px; }
+        .bit-cell { width: 4px; height: 4px; background: #475569; }
+        .bit-cell.on { background: #e2e8f0; }
         
-        .btn-danger { color: var(--kill); border-color: rgba(239, 68, 68, 0.3); }
-        .btn-danger:hover { background: rgba(239, 68, 68, 0.1); }
+        .bit-val { font-size: 10px; color: #64748b; font-weight: bold; }
+        .rule-bit.active .bit-val { color: var(--accent); }
 
-        .btn-action { width: 60px; }
-        .btn-action.stop { background: rgba(239, 68, 68, 0.2); color: var(--kill); border-color: var(--kill); }
-        .btn-action.start { background: rgba(34, 197, 94, 0.2); color: var(--run); border-color: var(--run); }
-
-        .power-btn { 
-            background: none; border: none; font-size: 1.2rem; padding: 0 5px; color: var(--muted);
+        /* --- UTILS --- */
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .sub-text { font-size: 11px; color: #64748b; line-height: 1.4; margin-bottom: 10px; }
+        .info-pill { 
+            font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.3);
+            border: 1px solid #334155;
         }
-        .power-btn:hover { color: #fff; background: none; }
-        .power-btn.on { color: var(--spawn); text-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
-
-        .tool-row { display: flex; gap: 4px; margin-top: 4px; }
-
     </style>
 </head>
 <body>
 
-    <header>
-        <h1>Recursive Automaton V3.0</h1>
+    <div class="viewport">
+        <div class="header">
+            <span style="font-weight:bold; color:var(--accent)">ECA // 2D HYBRID v2.3</span>
+            <div style="display:flex; gap:10px;">
+                <label style="font-size:11px; color:#aaa">
+                    <input type="checkbox" id="wrap2dCheck" checked onchange="world.setWrap(this.checked)"> Wrap World
+                </label>
+                <button onclick="world.randomize()">Randomize World</button>
+                <button onclick="world.clear()">Clear World</button>
+            </div>
+        </div>
+        <div class="world-wrapper" id="worldWrapper">
+            <canvas id="worldCanvas" width="300" height="200"></canvas>
+            
+            <div id="nbPreview" class="neighborhood-preview">
+                <div style="color:#aaa; font-size:10px; margin-bottom:4px">INDEX: <span id="inspIndex" style="color:var(--text)">0</span></div>
+                <div class="nb-grid" id="nbGrid"></div>
+                <div style="color:#aaa; font-size:10px;">OUTCOME: <span id="inspOutcome" style="font-weight:bold">?</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
         
-        <div class="global-controls">
-            <div class="control-group">
-                <label>Speed</label>
-                <input type="range" id="speedSlider" min="1" max="60" value="30">
-                <span id="fpsDisplay">30</span>
+        <div class="control-block">
+            <div class="row">
+                <h2>Simulation</h2>
+                <div style="display:flex; gap:10px; align-items: center;">
+                    <span id="fpsDisplay" style="font-size:11px; color:#888">30 FPS</span>
+                    <button id="pauseBtn" class="primary" onclick="togglePause()">STOP</button>
+                </div>
             </div>
-            <div class="control-group">
-                <button id="globalPauseBtn" class="btn-action stop">STOP</button>
-                <button onclick="world.randomize()">RND WORLD</button>
-                <button onclick="world.grid.fill(0)">CLEAR</button>
-                <button onclick="totalChaos()" class="btn-danger">CHAOS</button>
-            </div>
-        </div>
-    </header>
-
-    <div class="workspace">
-        <div class="world-container">
-            <canvas id="worldCanvas" width="200" height="120"></canvas>
+            <input type="range" id="speedRange" min="1" max="60" value="30">
         </div>
 
-        <div class="logic-stack">
-            <div class="stack-header">
-                <span style="font-weight:bold; color:var(--muted)">PHYSICS LAWS</span>
-                <button class="btn-primary" onclick="addSuperRule()">+ NEW LAW</button>
+        <div class="control-block">
+            <div class="row">
+                <h2>1D Gene Strip</h2>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="genCount" style="font-size:11px; font-family:monospace">G:0</span>
+                    <button id="pauseStripBtn" style="border-color:var(--warn); color:var(--warn); background:transparent" onclick="toggleStripPause()">Pause Gene</button>
+                </div>
             </div>
-            <div id="rulesContainer" class="stack-scroll-area"></div>
+            
+            <div class="sub-text">
+                <strong style="color:var(--text)">MOUSE CONTROLS (Top Row):</strong><br>
+                • <strong>Click:</strong> Toggle State<br>
+                • <strong>Shift+Click:</strong> Lock <span style="color:var(--lock-on)">ON</span> (Green)<br>
+                • <strong>Ctrl/Alt+Click:</strong> Lock <span style="color:var(--lock-off)">OFF</span> (Red)<br>
+                • <strong>Right Click:</strong> Unlock
+            </div>
+            
+            <div class="row" style="margin-top:10px; background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">
+                <div style="display:flex; flex-direction:column; gap:5px; width:100%">
+                    <div class="row" style="margin:0">
+                        <label style="font-size:11px; color:#aaa">
+                            <input type="checkbox" id="wrap1dCheck" checked onchange="strip.setWrap(this.checked)"> Wrap Gene
+                        </label>
+                        <div style="display:flex; align-items:center; gap:5px;">
+                            <span style="font-size:10px; color:#888;">DELAY:</span>
+                            <input type="number" id="geneDelayInput" value="1" min="1" max="100" style="width:40px">
+                        </div>
+                    </div>
+                    <div class="row" style="margin:0">
+                         <label style="font-size:11px; color:#aaa">Rnd Density:</label>
+                         <input type="range" id="stripDensity" min="0" max="100" value="5" style="width:60px">
+                    </div>
+                </div>
+            </div>
+
+            <div class="row" style="justify-content: flex-end; gap: 5px; flex-wrap:wrap">
+                <button onclick="strip.stabilize()" class="lock-btn" title="Lock Empty(0) and Full(511) to OFF to prevent flashing">Stabilize (Anti-Flash)</button>
+                <button onclick="randomizeStrip()">RND</button>
+                <button onclick="strip.seedCenter()">CTR</button>
+                <button onclick="strip.seedClear()">CLR</button>
+                <button onclick="strip.unlockAll()" style="font-size:10px">Unlock All</button>
+            </div>
+
+            <div class="wolfram-display-container" oncontextmenu="return false;">
+                <canvas id="wolframCanvas" width="512" height="60"></canvas>
+            </div>
         </div>
+
+        <div class="control-block" style="flex:1">
+            <div class="row">
+                <h2>Elementary Rule</h2>
+                <div style="display:flex; gap:5px">
+                    <button onclick="randomizeRule()">RND</button>
+                    <input type="number" id="ruleInput" value="30" min="0" max="255" onchange="setRuleFromInput(this.value)">
+                </div>
+            </div>
+
+            <div class="rule-grid" id="ruleGrid"></div>
+
+            <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top:15px;">
+                <h3 style="font-size: 0.8rem; color: #64748b; margin-bottom:10px">Presets</h3>
+                <div style="display:flex; gap: 5px; flex-wrap: wrap;">
+                    <button onclick="setRule(30)">R30 (Chaos)</button>
+                    <button onclick="setRule(90)">R90 (Fractal)</button>
+                    <button onclick="setRule(110)">R110 (Comp)</button>
+                    <button onclick="setRule(184)">R184 (Flow)</button>
+                    <button onclick="setRule(73)">R73 (Wall)</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <script>
         /* --- CONFIG --- */
-        const WORLD_W = 200; 
-        const WORLD_H = 120;
-        const PHYS_SIZE = 9;
-        const SUB_SIZE = 3;
+        const W = 300;
+        const H = 200;
+        const STRIP_LEN = 512; 
+        
+        /* --- STATE --- */
+        let isPaused = false;
+        let isStripPaused = false;
+        let fps = 30;
+        let ruleByte = 30;
+        let geneUpdateCounter = 0;
+        
+        /* --- 1D AUTOMATON --- */
+        class Strip {
+            constructor() {
+                this.cells = new Uint8Array(STRIP_LEN);
+                this.next = new Uint8Array(STRIP_LEN);
+                // 0: Unlocked, 1: Forced ON, 2: Forced OFF
+                this.locks = new Uint8Array(STRIP_LEN); 
+                this.history = [];
+                this.gen = 0;
+                this.wrap = true;
+                this.seedCenter();
+            }
 
-        /* --- DATA STRUCTURES --- */
-        class Grid {
+            setWrap(val) { this.wrap = val; }
+
+            seedCenter() {
+                this.cells.fill(0);
+                // Preserve locks during reset? Let's say yes for now, 
+                // but ensure locked values are applied immediately
+                this.applyLocks();
+                if(this.locks[Math.floor(STRIP_LEN / 2)] === 0) {
+                     this.cells[Math.floor(STRIP_LEN / 2)] = 1; 
+                }
+                this.resetHistory();
+            }
+
+            seedRandom(densityPercent) {
+                this.cells.fill(0);
+                for(let i=0; i<STRIP_LEN; i++) {
+                    if(this.locks[i] !== 0) continue; // Skip locked
+                    if(Math.random() * 100 < densityPercent) this.cells[i] = 1;
+                }
+                this.applyLocks();
+                this.resetHistory();
+            }
+
+            seedClear() {
+                this.cells.fill(0);
+                this.applyLocks();
+                this.resetHistory();
+            }
+
+            // New feature: Lock edges to 0 to prevent flashing
+            stabilize() {
+                this.locks[0] = 2; // Lock Index 0 (empty neighborhood) to OFF
+                this.locks[STRIP_LEN-1] = 2; // Lock Index 511 (full neighborhood) to OFF
+                this.applyLocks();
+            }
+
+            unlockAll() {
+                this.locks.fill(0);
+            }
+
+            applyLocks() {
+                for(let i=0; i<STRIP_LEN; i++) {
+                    if(this.locks[i] === 1) this.cells[i] = 1;
+                    if(this.locks[i] === 2) this.cells[i] = 0;
+                }
+            }
+
+            resetHistory() {
+                this.history = new Array(60).fill(null).map(() => new Uint8Array(STRIP_LEN));
+                this.history[0].set(this.cells);
+                this.gen = 0;
+            }
+
+            evolve() {
+                for (let i = 0; i < STRIP_LEN; i++) {
+                    // Check Locks First
+                    if (this.locks[i] === 1) {
+                        this.next[i] = 1;
+                        continue;
+                    }
+                    if (this.locks[i] === 2) {
+                        this.next[i] = 0;
+                        continue;
+                    }
+
+                    let leftVal = 0, rightVal = 0;
+
+                    if (this.wrap) {
+                        leftVal = this.cells[(i - 1 + STRIP_LEN) % STRIP_LEN];
+                        rightVal = this.cells[(i + 1) % STRIP_LEN];
+                    } else {
+                        const li = i - 1;
+                        const ri = i + 1;
+                        leftVal = (li < 0) ? 0 : this.cells[li];
+                        rightVal = (ri >= STRIP_LEN) ? 0 : this.cells[ri];
+                    }
+
+                    const center = this.cells[i];
+                    const pattern = (leftVal << 2) | (center << 1) | rightVal;
+                    this.next[i] = (ruleByte >> pattern) & 1;
+                }
+                [this.cells, this.next] = [this.next, this.cells];
+                
+                this.history.pop();
+                this.history.unshift(new Uint8Array(this.cells));
+                this.gen++;
+            }
+        }
+
+        /* --- 2D WORLD --- */
+        class World {
             constructor(w, h) {
                 this.w = w; this.h = h;
-                this.data = new Int8Array(w * h);
-                this.next = new Int8Array(w * h);
-            }
-            fill(val) { this.data.fill(val); }
-            randomize(density = 0.5) {
-                for(let i=0; i<this.data.length; i++) this.data[i] = Math.random() < density ? 1 : 0;
-            }
-            get(x, y, wrap = true) {
-                if (wrap) { x = (x + this.w) % this.w; y = (y + this.h) % this.h; }
-                else if (x < 0 || x >= this.w || y < 0 || y >= this.h) return 0;
-                return this.data[y * this.w + x];
-            }
-            set(x, y, val) {
-                if (x >= 0 && x < this.w && y >= 0 && y < this.h) this.data[y * this.w + x] = val;
-            }
-            swap() {
-                let temp = this.data; this.data = this.next; this.next = temp; this.next.fill(0); 
-            }
-        }
-
-        class SubRule {
-            constructor() {
-                this.id = Math.random().toString(36).substr(2, 9);
-                this.active = true;
-                this.input = new Grid(SUB_SIZE, SUB_SIZE);  // Condition
-                this.output = new Grid(SUB_SIZE, SUB_SIZE); // Result
-            }
-        }
-
-        class SuperRule {
-            constructor(id) {
-                this.id = id;
-                this.active = true;
-                this.paused = false;
-                
-                // The "Brain" (Condition) - Evolves based on SubRules
-                this.physics = new Grid(PHYS_SIZE, PHYS_SIZE);
-                
-                // The "Stamp" (Result) - Static output applied to World
-                this.output = new Grid(PHYS_SIZE, PHYS_SIZE);
-                
-                this.subRules = []; 
+                this.data = new Uint8Array(w * h);
+                this.next = new Uint8Array(w * h);
+                this.wrap = true;
+                this.randomize();
             }
 
-            // Evolve the Physics Grid (The "Brain")
-            stepPhysics() {
-                if (!this.active || this.paused) return;
+            setWrap(val) { this.wrap = val; }
 
-                const g = this.physics;
-                // Standard CA Logic: Write to Next, then Swap
-                
-                for (let py = 0; py < g.h; py++) {
-                    for (let px = 0; px < g.w; px++) {
+            randomize() {
+                for(let i=0; i<this.data.length; i++) this.data[i] = Math.random() > 0.85 ? 1 : 0;
+            }
+            
+            clear() { this.data.fill(0); }
+
+            getNeighborhood(x, y) {
+                let index = 0;
+                let bitPos = 8;
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        let ny, nx, val = 0;
+                        if (this.wrap) {
+                            ny = (y + dy + this.h) % this.h;
+                            nx = (x + dx + this.w) % this.w;
+                            val = this.data[ny * this.w + nx];
+                        } else {
+                            ny = y + dy;
+                            nx = x + dx;
+                            if (ny >= 0 && ny < this.h && nx >= 0 && nx < this.w) {
+                                 val = this.data[ny * this.w + nx];
+                            }
+                        }
+                        if (val === 1) index |= (1 << bitPos);
+                        bitPos--;
+                    }
+                }
+                return index;
+            }
+
+            update(controllerStrip) {
+                const d = this.data;
+                const n = this.next;
+                const w = this.w;
+                const h = this.h;
+                const strip = controllerStrip.cells;
+
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        let index = 0;
+                        let bitPos = 8;
                         
-                        this.subRules.forEach(sub => {
-                            if(!sub.active) return;
-                            
-                            // Check Match (Input)
-                            let match = true;
-                            let hasInput = false;
-
-                            for (let sy = 0; sy < SUB_SIZE; sy++) {
-                                for (let sx = 0; sx < SUB_SIZE; sx++) {
-                                    const ruleVal = sub.input.get(sx, sy, false);
-                                    if (ruleVal === 1) {
-                                        hasInput = true;
-                                        // Offset relative to current pixel
-                                        const ox = sx - 1; 
-                                        const oy = sy - 1;
-                                        if (g.get(px + ox, py + oy) === 0) {
-                                            match = false; break;
-                                        }
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                let ny, nx, val = 0;
+                                if (this.wrap) {
+                                    ny = (y + dy + h) % h;
+                                    nx = (x + dx + w) % w;
+                                    val = d[ny * w + nx];
+                                } else {
+                                    ny = y + dy;
+                                    nx = x + dx;
+                                    if(ny >= 0 && ny < h && nx >= 0 && nx < w) {
+                                         val = d[ny * w + nx];
                                     }
                                 }
-                                if(!match) break;
+                                if (val === 1) index |= (1 << bitPos);
+                                bitPos--;
                             }
-
-                            // Apply Result (Output)
-                            if (match && hasInput) {
-                                for (let sy = 0; sy < SUB_SIZE; sy++) {
-                                    for (let sx = 0; sx < SUB_SIZE; sx++) {
-                                        if (sub.output.get(sx, sy, false) === 1) {
-                                            const ox = sx - 1;
-                                            const oy = sy - 1;
-                                            // Write to NEXT grid
-                                            const tx = (px + ox + g.w) % g.w;
-                                            const ty = (py + oy + g.h) % g.h;
-                                            g.next[ty * g.w + tx] = 1; 
-                                        }
-                                    }
-                                }
-                            }
-                        });
+                        }
+                        n[y * w + x] = strip[index];
                     }
                 }
-                g.swap();
+                [this.data, this.next] = [this.next, this.data];
             }
         }
 
-        class Simulation {
-            constructor() {
-                this.world = new Grid(WORLD_W, WORLD_H);
-                this.world.randomize(0.1);
-                this.superRules = [];
-                this.paused = false;
-            }
+        /* --- INIT --- */
+        const strip = new Strip();
+        const world = new World(W, H);
 
-            addRule() {
-                const r = new SuperRule(Date.now());
-                // Default: Simple Blinker Logic
-                r.subRules.push(new SubRule());
-                this.superRules.push(r);
-                renderUI();
-            }
+        /* --- RENDERERS --- */
+        const worldCtx = document.getElementById('worldCanvas').getContext('2d');
+        const wolframCtx = document.getElementById('wolframCanvas').getContext('2d');
+        const worldImgData = worldCtx.createImageData(W, H);
+        const wolframImgData = wolframCtx.createImageData(512, 60);
 
-            step() {
-                // 1. Evolve all Physics Grids (The Brains)
-                this.superRules.forEach(r => r.stepPhysics());
-
-                if (this.paused) return;
-
-                // 2. Evolve World based on Physics Grids
-                const w = this.world;
-                const pCenterOffset = Math.floor(PHYS_SIZE / 2);
-
-                for (let i = 0; i < w.data.length; i++) {
-                    let wx = i % w.w;
-                    let wy = Math.floor(i / w.w);
-
-                    // Check every Super Rule
-                    this.superRules.forEach(r => {
-                        if (!r.active) return;
-
-                        // Check 9x9 Match: World vs Rule.Physics
-                        let match = true;
-                        let hasStructure = false;
-
-                        for(let ry = 0; ry < PHYS_SIZE; ry++) {
-                            for(let rx = 0; rx < PHYS_SIZE; rx++) {
-                                const pVal = r.physics.get(rx, ry, false);
-                                if (pVal === 1) {
-                                    hasStructure = true;
-                                    const ox = rx - pCenterOffset;
-                                    const oy = ry - pCenterOffset;
-                                    
-                                    if (w.get(wx + ox, wy + oy) === 0) {
-                                        match = false; break;
-                                    }
-                                }
-                            }
-                            if(!match) break;
-                        }
-
-                        // If Match found, Stamp Rule.Output onto World.Next
-                        if (match && hasStructure) {
-                            for(let ry = 0; ry < PHYS_SIZE; ry++) {
-                                for(let rx = 0; rx < PHYS_SIZE; rx++) {
-                                    if (r.output.get(rx, ry, false) === 1) {
-                                        const ox = rx - pCenterOffset;
-                                        const oy = ry - pCenterOffset;
-                                        const tx = (wx + ox + w.w) % w.w;
-                                        const ty = (wy + oy + w.h) % w.h;
-                                        w.next[ty * w.w + tx] = 1;
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-                w.swap();
-            }
-        }
-
-        /* --- GLOBAL STATE --- */
-        const sim = new Simulation();
-        
-        // Initial Setup
-        const r1 = new SuperRule(1);
-        r1.physics.set(4, 4, 1); r1.physics.set(3, 4, 1); // Condition: Center + Left
-        r1.output.set(4, 4, 1); r1.output.set(5, 4, 1);   // Result: Center + Right (Move Right)
-        
-        const s1 = new SubRule();
-        s1.input.set(1, 1, 1); // If Center...
-        s1.output.set(2, 1, 1); // Write Right (Physics glides right)
-        r1.subRules.push(s1);
-        
-        sim.superRules.push(r1);
-
-        /* --- RENDERER --- */
-        let fps = 30;
-        let lastTime = 0;
-        const ctx = document.getElementById('worldCanvas').getContext('2d');
-
-        // Draw Helper
-        function drawGrid(ctx, grid, color, showGrid=false) {
-            const w = grid.w; const h = grid.h;
-            const cvs = ctx.canvas;
-            ctx.fillStyle = '#000'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        function drawWorld() {
+            const buf = new Uint32Array(worldImgData.data.buffer);
+            const len = world.data.length;
+            // Palette: 
+            // Dead: 0xFF1e1b20 (Dark Slate/Blackish) -> ABGR 0xFF201B1E ? No, let's use HEX logic
+            // JS uses Little Endian usually. AABBGGRR.
+            // Dead: #020617 -> 0xFF170602
+            // Alive: #38bdf8 (Sky Blue 400) -> 0xFFF8BD38
             
-            const cw = cvs.width / w;
-            const ch = cvs.height / h;
+            const colDead = 0xFF170602; 
+            const colAlive = 0xFFF8BD38;
 
-            for(let y=0; y<h; y++) {
-                for(let x=0; x<w; x++) {
-                    const val = grid.data[y*w+x];
-                    
-                    if(showGrid) {
-                        ctx.strokeStyle = '#222'; ctx.lineWidth=0.5;
-                        ctx.strokeRect(x*cw, y*ch, cw, ch);
-                    }
+            for(let i=0; i<len; i++) {
+                buf[i] = world.data[i] ? colAlive : colDead; 
+            }
+            worldCtx.putImageData(worldImgData, 0, 0);
+        }
 
-                    if(val === 1) {
-                        ctx.fillStyle = color;
-                        ctx.fillRect(x*cw, y*ch, cw, ch);
-                    }
+        function drawWolfram() {
+            const buf = new Uint32Array(wolframImgData.data.buffer);
+            for(let y=0; y<60; y++) {
+                const row = strip.history[y];
+                if(!row) continue;
+                
+                const isActiveRow = (y === 0);
+
+                for(let x=0; x<512; x++) {
+                    const val = row[x];
+                    let col = 0xFF000000;
                     
-                    // Center Marker
-                    if(showGrid && x === Math.floor(w/2) && y === Math.floor(h/2)) {
-                        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-                        ctx.strokeRect(x*cw+1, y*ch+1, cw-2, ch-2);
+                    if(isActiveRow) {
+                        // Check locks for coloring
+                        const lock = strip.locks[x];
+                        
+                        if (val) col = 0xFFFFFFFF; // White for ON
+                        else col = 0xFF222222;    // Dark Grey for OFF
+                        
+                        // Overlay Lock Colors (Subtle tint or bar)
+                        // Note: putImageData doesn't support transparency blending well manually without cost
+                        // We will draw locks as a separate pass using fillRect for clarity
+                    } else {
+                        // Fading History - Softer colors (Cyan/Teal fade)
+                        // #0ea5e9 to dark
+                        const fade = Math.max(10, 180 - (y*3));
+                        if(val) {
+                            // ABGR
+                            col = (255 << 24) | (200 << 16) | (165 << 8) | 14; 
+                        } else {
+                            col = 0xFF050505;
+                        }
                     }
+                    buf[y*512 + x] = col;
+                }
+            }
+            wolframCtx.putImageData(wolframImgData, 0, 0);
+
+            // Draw Lock Indicators on top row
+            for(let x=0; x<512; x++) {
+                const lock = strip.locks[x];
+                if(lock === 1) { // Forced ON
+                    wolframCtx.fillStyle = '#4ade80';
+                    wolframCtx.fillRect(x, 0, 1, 2); // Top bar
+                    wolframCtx.fillRect(x, 0, 1, 1); // Ensure white pixel is covered slightly or tinted
+                } else if(lock === 2) { // Forced OFF
+                    wolframCtx.fillStyle = '#ef4444';
+                    wolframCtx.fillRect(x, 0, 1, 2);
                 }
             }
         }
 
-        /* --- INPUT HANDLING --- */
+        /* --- UI & INTERACTION --- */
+        
+        function buildRuleUI() {
+            const grid = document.getElementById('ruleGrid');
+            grid.innerHTML = '';
+            document.getElementById('ruleInput').value = ruleByte;
+            
+            for(let i=7; i>=0; i--) {
+                const isActive = (ruleByte >> i) & 1;
+                const div = document.createElement('div');
+                div.className = `rule-bit ${isActive ? 'active' : ''}`;
+                div.onclick = () => toggleBit(i);
+                
+                let patHTML = '<div class="bit-pattern">';
+                patHTML += `<div class="bit-cell ${(i>>2)&1 ? 'on':''}"></div>`;
+                patHTML += `<div class="bit-cell ${(i>>1)&1 ? 'on':''}"></div>`;
+                patHTML += `<div class="bit-cell ${(i)&1 ? 'on':''}"></div>`;
+                patHTML += '</div>';
+
+                div.innerHTML = `${patHTML}<div class="bit-val">${isActive}</div>`;
+                grid.appendChild(div);
+            }
+        }
+
+        function toggleBit(bit) {
+            ruleByte ^= (1 << bit);
+            buildRuleUI();
+        }
+
+        function setRule(n) {
+            ruleByte = n;
+            buildRuleUI();
+        }
+
+        function randomizeRule() {
+            setRule(Math.floor(Math.random() * 256));
+        }
+
+        function setRuleFromInput(val) {
+            let n = parseInt(val);
+            if(isNaN(n)) n = 0;
+            n = Math.max(0, Math.min(255, n));
+            setRule(n);
+        }
+
+        /* --- STRIP CONTROLS --- */
+        function randomizeStrip() {
+            const density = parseInt(document.getElementById('stripDensity').value);
+            strip.seedRandom(density);
+        }
+
+        /* --- SIM CONTROLS --- */
+        function togglePause() {
+            isPaused = !isPaused;
+            const btn = document.getElementById('pauseBtn');
+            btn.innerText = isPaused ? "START" : "STOP";
+            btn.className = isPaused ? "run" : "primary";
+            btn.style.backgroundColor = isPaused ? "var(--run)" : "var(--stop)";
+            btn.style.borderColor = isPaused ? "var(--run)" : "var(--stop)";
+        }
+
+        function toggleStripPause() {
+            isStripPaused = !isStripPaused;
+            const btn = document.getElementById('pauseStripBtn');
+            btn.innerText = isStripPaused ? "Resume Gene" : "Pause Gene";
+            if(isStripPaused) {
+                btn.style.color = "var(--text)";
+                btn.style.borderColor = "var(--text)";
+            }
+            else {
+                btn.style.color = "var(--warn)";
+                btn.style.borderColor = "var(--warn)";
+            }
+        }
+
+        document.getElementById('speedRange').addEventListener('input', (e) => {
+            fps = parseInt(e.target.value);
+            document.getElementById('fpsDisplay').innerText = fps + " FPS";
+        });
+
+        /* --- MOUSE DRAWING & INSPECTION --- */
         let isDrawing = false;
-        let drawVal = 1;
+        let isDrawingStrip = false;
+        
+        const worldCvs = document.getElementById('worldCanvas');
+        const wolfCvs = document.getElementById('wolframCanvas');
+        const nbPreview = document.getElementById('nbPreview');
+        const nbGrid = document.getElementById('nbGrid');
+        const inspIndex = document.getElementById('inspIndex');
+        const inspOutcome = document.getElementById('inspOutcome');
 
-        function attachInput(canvas, gridGetter, color) {
-            if(canvas.getAttribute('data-bound')) return;
-            canvas.setAttribute('data-bound', 'true');
-
-            const paint = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const g = gridGetter();
-                const x = Math.floor((e.clientX - rect.left) / (rect.width/g.w));
-                const y = Math.floor((e.clientY - rect.top) / (rect.height/g.h));
-                g.set(x, y, drawVal);
-                
-                // Immediate local redraw
-                drawGrid(canvas.getContext('2d'), g, color, true);
+        // Helper for mouse pos
+        const getPos = (e, canvas) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: Math.floor((e.clientX - rect.left) * scaleX),
+                y: Math.floor((e.clientY - rect.top) * scaleY)
             };
-
-            canvas.addEventListener('mousedown', (e) => {
-                isDrawing = true;
-                const rect = canvas.getBoundingClientRect();
-                const g = gridGetter();
-                const x = Math.floor((e.clientX - rect.left) / (rect.width/g.w));
-                const y = Math.floor((e.clientY - rect.top) / (rect.height/g.h));
-                drawVal = g.get(x, y, false) === 1 ? 0 : 1;
-                paint(e);
-            });
-            canvas.addEventListener('mousemove', (e) => { if(isDrawing) paint(e); });
-            window.addEventListener('mouseup', () => isDrawing = false);
         }
 
-        attachInput(document.getElementById('worldCanvas'), () => sim.world, '#3b82f6');
+        // --- World Interactions ---
+        const paintWorld = (e) => {
+            const {x, y} = getPos(e, worldCvs);
+            for(let dy=-1; dy<=1; dy++) {
+                for(let dx=-1; dx<=1; dx++) {
+                    if (x+dx>=0 && x+dx<W && y+dy>=0 && y+dy<H) {
+                        world.data[(y+dy)*W + (x+dx)] = 1;
+                    }
+                }
+            }
+            drawWorld();
+        };
 
-        /* --- UI GENERATION --- */
-        const container = document.getElementById('rulesContainer');
+        const inspectWorld = (e) => {
+            const {x, y} = getPos(e, worldCvs);
+            if(x < 0 || x >= W || y < 0 || y >= H) {
+                nbPreview.style.display = 'none';
+                return;
+            }
 
-        function renderUI() {
-            // Smart update: Only recreate if counts mismatch, otherwise update classes
-            // For simplicity in this demo, we verify ID existence.
-            
-            sim.superRules.forEach((r, idx) => {
-                let card = document.getElementById(`card-${r.id}`);
-                
-                // CREATE CARD IF MISSING
-                if(!card) {
-                    card = document.createElement('div');
-                    card.id = `card-${r.id}`;
-                    card.className = 'rule-card';
-                    card.innerHTML = `
-                        <div class="card-header">
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <button class="power-btn" id="pwr-${r.id}" onclick="toggleActive(${r.id})">⏻</button>
-                                <span style="font-weight:bold; font-size:0.9rem">LAW ${idx+1}</span>
-                            </div>
-                            <div style="display:flex; gap:5px;">
-                                <button id="play-${r.id}" class="btn-action stop" onclick="togglePause(${r.id})">STOP</button>
-                                <button class="btn-danger" style="width:25px" onclick="removeRule(${r.id})">×</button>
-                            </div>
-                        </div>
+            const index = world.getNeighborhood(x, y);
+            const outcome = strip.cells[index];
 
-                        <div class="super-io-row">
-                            <div class="canvas-wrapper">
-                                <div class="grid-label">CONDITION (BRAIN)</div>
-                                <canvas id="phys-${r.id}" class="physics-canvas" width="90" height="90"></canvas>
-                                <div class="tool-row">
-                                    <button onclick="clearGrid(${r.id}, 'phys')">CLR</button>
-                                    <button onclick="rndGrid(${r.id}, 'phys')">RND</button>
-                                </div>
-                            </div>
-                            <div class="arrow-large">➜</div>
-                            <div class="canvas-wrapper">
-                                <div class="grid-label">RESULT (STAMP)</div>
-                                <canvas id="out-${r.id}" class="physics-canvas" width="90" height="90"></canvas>
-                                <div class="tool-row">
-                                    <button onclick="clearGrid(${r.id}, 'out')">CLR</button>
-                                    <button onclick="fillGrid(${r.id}, 'out')">FILL</button>
-                                </div>
-                            </div>
-                        </div>
+            nbPreview.style.display = 'block';
+            inspIndex.innerText = index;
+            inspOutcome.innerText = outcome ? "LIVES" : "DIES";
+            inspOutcome.style.color = outcome ? "var(--run)" : "var(--stop)";
 
-                        <div class="sub-col" id="subs-${r.id}"></div>
-                        <button style="width:100%; margin-top:10px; opacity:0.7" onclick="addSub(${r.id})">+ ADD LOGIC</button>
-                    `;
-                    container.appendChild(card);
+            nbGrid.innerHTML = '';
+            for(let i=8; i>=0; i--) {
+                const isOn = (index >> i) & 1;
+                const d = document.createElement('div');
+                d.className = `nb-cell ${isOn ? 'on' : ''} ${i===4 ? 'center':''}`;
+                nbGrid.appendChild(d);
+            }
+        }
 
-                    // Bind Canvases
-                    attachInput(document.getElementById(`phys-${r.id}`), () => r.physics, '#3b82f6');
-                    attachInput(document.getElementById(`out-${r.id}`), () => r.output, '#22c55e');
+        worldCvs.addEventListener('mousedown', (e) => { isDrawing = true; paintWorld(e); });
+        worldCvs.addEventListener('mousemove', (e) => { 
+            if(isDrawing) paintWorld(e); 
+            else inspectWorld(e);
+        });
+        worldCvs.addEventListener('mouseleave', () => nbPreview.style.display = 'none');
+        
+        // --- Strip Interactions (Painting & Locking) ---
+        const interactStrip = (e) => {
+            const {x, y} = getPos(e, wolfCvs);
+            if(x >= 0 && x < STRIP_LEN) {
+                // Determine Action based on keys/buttons
+                if (e.buttons === 2) { // Right Click
+                    strip.locks[x] = 0; // Unlock
+                    // Just visual update, actual value determined by sim next frame
+                } else if (e.shiftKey) { // Shift + Left
+                    strip.locks[x] = 1; // Force ON
+                    strip.cells[x] = 1; 
+                } else if (e.ctrlKey || e.altKey) { // Ctrl/Alt + Left
+                    strip.locks[x] = 2; // Force OFF
+                    strip.cells[x] = 0;
+                } else if (e.buttons === 1) { // Normal Left
+                     // Only toggle/paint if not locked? 
+                     // Let's allow painting to override visual, but lock holds next frame
+                     // For pure painting, we just set cell to 1
+                     if(strip.locks[x] === 0) strip.cells[x] = 1;
                 }
 
-                // UPDATE STATE VISUALS
-                card.setAttribute('data-active', r.active);
-                document.getElementById(`pwr-${r.id}`).className = `power-btn ${r.active ? 'on' : ''}`;
-                const playBtn = document.getElementById(`play-${r.id}`);
-                playBtn.className = `btn-action ${r.paused ? 'start' : 'stop'}`;
-                playBtn.innerText = r.paused ? 'START' : 'STOP';
-
-                // SUB RULES RENDER
-                const subContainer = document.getElementById(`subs-${r.id}`);
-                
-                // Cleanup deleted
-                Array.from(subContainer.children).forEach(el => {
-                    const sid = el.id.split('-')[1];
-                    if(!r.subRules.find(s => s.id == sid)) el.remove();
-                });
-
-                r.subRules.forEach(s => {
-                    let subEl = document.getElementById(`sub-${s.id}`);
-                    if(!subEl) {
-                        subEl = document.createElement('div');
-                        subEl.id = `sub-${s.id}`;
-                        subEl.className = 'sub-rule-item';
-                        subEl.innerHTML = `
-                            <button class="power-btn" id="spwr-${s.id}" onclick="toggleSub(${r.id}, '${s.id}')" style="font-size:1rem">⏻</button>
-                            <canvas id="sin-${s.id}" class="sub-canvas" width="36" height="36"></canvas>
-                            <span style="color:#666">➜</span>
-                            <canvas id="sout-${s.id}" class="sub-canvas" width="36" height="36"></canvas>
-                            <div style="flex:1"></div>
-                            <button class="btn-danger" style="padding:2px 6px" onclick="removeSub(${r.id}, '${s.id}')">×</button>
-                        `;
-                        subContainer.appendChild(subEl);
-                        attachInput(document.getElementById(`sin-${s.id}`), () => s.input, '#3b82f6');
-                        attachInput(document.getElementById(`sout-${s.id}`), () => s.output, '#3b82f6');
-                    }
-                    subEl.setAttribute('data-active', s.active);
-                    document.getElementById(`spwr-${s.id}`).className = `power-btn ${s.active ? 'on' : ''}`;
-                });
-            });
-            
-            // Cleanup deleted Super Rules
-            Array.from(container.children).forEach(c => {
-                const rid = c.id.split('-')[1];
-                if(!sim.superRules.find(r => r.id == rid)) c.remove();
-            });
+                strip.history[0][x] = strip.cells[x];
+                drawWolfram();
+            }
         }
 
-        /* --- INTERACTIONS --- */
-        function toggleActive(rid) { const r = sim.superRules.find(x => x.id == rid); r.active = !r.active; renderUI(); }
-        function togglePause(rid) { const r = sim.superRules.find(x => x.id == rid); r.paused = !r.paused; renderUI(); }
-        function removeRule(rid) { sim.superRules = sim.superRules.filter(x => x.id != rid); renderUI(); }
+        wolfCvs.addEventListener('mousedown', (e) => { 
+            isDrawingStrip = true; 
+            interactStrip(e); 
+        });
+        wolfCvs.addEventListener('mousemove', (e) => { 
+            if(isDrawingStrip) interactStrip(e); 
+        });
         
-        function clearGrid(rid, type) { 
-            const r = sim.superRules.find(x => x.id == rid); 
-            if(type === 'phys') r.physics.fill(0); else r.output.fill(0); 
-        }
-        function rndGrid(rid, type) {
-             const r = sim.superRules.find(x => x.id == rid); 
-             if(type === 'phys') r.physics.randomize(); 
-        }
-        function fillGrid(rid, type) {
-             const r = sim.superRules.find(x => x.id == rid); 
-             if(type === 'out') r.output.fill(1); 
-        }
-
-        function addSub(rid) { 
-            const r = sim.superRules.find(x => x.id == rid); 
-            r.subRules.push(new SubRule()); 
-            renderUI(); 
-        }
-        function removeSub(rid, sid) {
-            const r = sim.superRules.find(x => x.id == rid);
-            r.subRules = r.subRules.filter(s => s.id != sid);
-            renderUI();
-        }
-        function toggleSub(rid, sid) {
-            const r = sim.superRules.find(x => x.id == rid);
-            const s = r.subRules.find(x => x.id == sid);
-            s.active = !s.active;
-            renderUI();
-        }
-        function addSuperRule() { sim.addRule(); }
-        function totalChaos() {
-            sim.world.randomize();
-            sim.superRules.forEach(r => {
-                r.physics.randomize();
-                r.output.randomize();
-            });
-        }
+        window.addEventListener('mouseup', () => {
+            isDrawing = false;
+            isDrawingStrip = false;
+        });
 
         /* --- LOOP --- */
-        document.getElementById('speedSlider').oninput = (e) => { 
-            fps = e.target.value; 
-            document.getElementById('fpsDisplay').innerText = fps; 
-        };
-
-        document.getElementById('globalPauseBtn').onclick = (e) => {
-            sim.paused = !sim.paused;
-            e.target.innerText = sim.paused ? "START" : "STOP";
-            e.target.className = `btn-action ${sim.paused ? 'start' : 'stop'}`;
-        };
-
-        function loop(timestamp) {
-            if(timestamp - lastTime >= 1000/fps) {
-                sim.step();
-                lastTime = timestamp;
-            }
-            drawGrid(ctx, sim.world, '#3b82f6');
-            
-            // Draw UI Grids
-            sim.superRules.forEach(r => {
-                const pc = document.getElementById(`phys-${r.id}`);
-                if(pc) drawGrid(pc.getContext('2d'), r.physics, r.active ? '#3b82f6' : '#555', true);
+        let lastTime = 0;
+        
+        function loop(time) {
+            if (!isPaused && time - lastTime > 1000 / fps) {
                 
-                const oc = document.getElementById(`out-${r.id}`);
-                if(oc) drawGrid(oc.getContext('2d'), r.output, r.active ? '#22c55e' : '#555', true);
+                // 1. Update World (Every frame)
+                world.update(strip);
+                
+                // 2. Logic to delay Strip update based on input
+                geneUpdateCounter++;
+                const delay = parseInt(document.getElementById('geneDelayInput').value) || 1;
 
-                r.subRules.forEach(s => {
-                    const sic = document.getElementById(`sin-${s.id}`);
-                    const soc = document.getElementById(`sout-${s.id}`);
-                    if(sic && soc) {
-                        drawGrid(sic.getContext('2d'), s.input, s.active ? '#3b82f6' : '#555', true);
-                        drawGrid(soc.getContext('2d'), s.output, s.active ? '#3b82f6' : '#555', true);
+                if(geneUpdateCounter >= delay) {
+                    if(!isStripPaused) {
+                        strip.evolve();
+                        document.getElementById('genCount').innerText = "G:" + strip.gen;
+                    } else {
+                        // Even if paused, we ensure locks are applied
+                        strip.applyLocks();
                     }
-                });
-            });
-
+                    geneUpdateCounter = 0;
+                }
+                
+                lastTime = time;
+            }
+            
+            drawWorld();
+            drawWolfram();
             requestAnimationFrame(loop);
         }
 
-        renderUI();
+        buildRuleUI();
         requestAnimationFrame(loop);
 
     </script>
