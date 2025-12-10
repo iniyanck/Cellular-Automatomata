@@ -173,17 +173,23 @@
             z-index: 100;
         }
 
-        /* --- INSPECTOR OVERLAY --- */
+        /* --- INSPECTOR OVERLAY (FIXED) --- */
         .neighborhood-preview {
             position: absolute; 
             bottom: 10px; left: 10px;
-            background: rgba(15, 23, 42, 0.7); /* Transparent bg */
+            background: rgba(15, 23, 42, 0.85);
             border: 1px solid var(--border);
-            backdrop-filter: blur(2px);
+            backdrop-filter: blur(4px);
             padding: 8px; border-radius: 4px; pointer-events: none;
             display: none; 
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
             z-index: 50;
+            
+            /* FIXED JITTER HERE */
+            width: 90px; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
         
         .nb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-bottom: 5px; }
@@ -276,7 +282,7 @@
         </div>
         
         <div class="world-wrapper" id="worldWrapper" oncontextmenu="return false;">
-            <canvas id="worldCanvas" width="300" height="200"></canvas>
+            <canvas id="worldCanvas" width="600" height="400"></canvas>
             
             <div id="nbPreview" class="neighborhood-preview">
                 <div style="font-size:10px; margin-bottom:4px; color:var(--text)">IDX: <span id="inspIndex" style="color:var(--text-head)">0</span></div>
@@ -391,8 +397,9 @@
 
     <script>
         /* --- CONFIG --- */
-        const W = 300;
-        const H = 200;
+        // UPDATED: W and H increased to pack more cells in the view
+        const W = 600; 
+        const H = 400;
         const STRIP_LEN = 512; 
         const HISTORY_LEN = 80; 
         
@@ -885,7 +892,7 @@
              }
              const index = world.getNeighborhood(x, y);
              const outcome = strip.cells[index];
-             document.getElementById('nbPreview').style.display = 'block';
+             document.getElementById('nbPreview').style.display = 'flex'; // Changed to flex for centering
              document.getElementById('inspIndex').innerText = index;
              const outSpan = document.getElementById('inspOutcome');
              outSpan.innerText = outcome ? "LIVES" : "DIES";
