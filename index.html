@@ -3,24 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wolfram-Driven 2D Automaton v2.3 (Masked)</title>
+    <title>CELLULAR AUTOMATOMATA</title>
     <style>
+        /* --- THEMES --- */
         :root {
             --bg: #0f172a;
             --panel: #1e293b;
             --text: #94a3b8;
+            --text-head: #e2e8f0;
             --accent: #6366f1;
             --accent-glow: rgba(99, 102, 241, 0.4);
             --border: #334155;
             --run: #10b981;
             --stop: #f43f5e;
             --warn: #f97316;
-            --lock-on: #4ade80; /* Green for force ON */
-            --lock-off: #ef4444; /* Red for force OFF */
+            --lock-on: #4ade80;
+            --lock-off: #ef4444;
+            
+            --cell-dead: #020617;
+            --cell-alive: #38bdf8;
+            
+            --font-main: 'Segoe UI', 'Roboto', monospace;
+        }
+
+        /* Matrix Theme */
+        [data-theme="matrix"] {
+            --bg: #000000; --panel: #0a0a0a; --text: #008f11; --text-head: #00ff41;
+            --accent: #00ff41; --accent-glow: rgba(0, 255, 65, 0.4);
+            --border: #003b00; --run: #00ff41; --stop: #005c00; --warn: #ccff00;
+            --lock-on: #afffaf; --lock-off: #003300;
+            --cell-dead: #000500; --cell-alive: #00ff41;
+        }
+
+        /* Magma Theme */
+        [data-theme="magma"] {
+            --bg: #1a0505; --panel: #2a0a0a; --text: #dcbaba; --text-head: #ffcccc;
+            --accent: #ff4500; --accent-glow: rgba(255, 69, 0, 0.4);
+            --border: #551111; --run: #ff8800; --stop: #880000; --warn: #ffcc00;
+            --lock-on: #ffaa55; --lock-off: #550000;
+            --cell-dead: #110000; --cell-alive: #ff4500;
+        }
+
+        /* Paper Theme */
+        [data-theme="paper"] {
+            --bg: #f8fafc; --panel: #ffffff; --text: #475569; --text-head: #0f172a;
+            --accent: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.2);
+            --border: #e2e8f0; --run: #22c55e; --stop: #ef4444; --warn: #f59e0b;
+            --lock-on: #15803d; --lock-off: #b91c1c;
+            --cell-dead: #ffffff; --cell-alive: #0f172a;
         }
 
         body {
-            font-family: 'Segoe UI', 'Roboto', monospace;
+            font-family: var(--font-main);
             background: var(--bg);
             color: var(--text);
             margin: 0;
@@ -37,162 +71,217 @@
             flex-direction: column;
             border-right: 1px solid var(--border);
             position: relative;
+            overflow: hidden;
         }
 
         .controls {
-            width: 400px;
+            width: 420px;
+            min-width: 420px;
             background: var(--bg);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
             box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+            border-left: 1px solid var(--border);
+            z-index: 20;
         }
 
-        /* --- COMPONENTS --- */
+        /* --- HEADER --- */
         .header {
-            padding: 15px;
+            padding: 8px 12px;
             background: var(--panel);
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap; gap: 8px;
+            z-index: 10;
         }
-
-        .control-block {
-            padding: 20px;
-            border-bottom: 1px solid var(--border);
-            background: var(--panel);
-        }
-
-        h2 { margin: 0 0 12px 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #cbd5e1; }
-        
-        button {
-            background: #334155; border: 1px solid #475569; color: #e2e8f0;
-            padding: 6px 12px; cursor: pointer; border-radius: 4px;
-            font-family: inherit; transition: all 0.2s;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
-        button:hover { background: #475569; transform: translateY(-1px); }
-        button:active { transform: translateY(0); }
-        button.primary { background: var(--accent); border-color: var(--accent); color: white; }
-        button.primary:hover { box-shadow: 0 0 10px var(--accent-glow); }
-        
-        button.danger { background: var(--stop); border-color: var(--stop); color: white; }
-        
-        button.lock-btn { border-color: var(--lock-on); color: var(--lock-on); background: transparent; }
-        button.lock-btn:hover { background: rgba(74, 222, 128, 0.1); }
-
-        input[type="range"] { width: 100%; cursor: pointer; }
-        input[type="number"] {
-            background: #0f172a; border: 1px solid #334155; color: white;
-            padding: 4px; border-radius: 4px; width: 60px; font-family: monospace;
-        }
-        input[type="checkbox"] { cursor: pointer; }
-
-        label { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
 
         /* --- CANVAS AREAS --- */
         .world-wrapper {
             flex: 1;
-            background: #020617; /* Darker slate for less harsh contrast */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            cursor: crosshair;
+            background: var(--cell-dead); /* Matches canvas bg for seamless look */
+            position: relative; 
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
         }
 
         canvas#worldCanvas {
             image-rendering: pixelated;
-            width: 100%; height: 100%; object-fit: contain;
+            position: absolute;
+            left: 0; top: 0;
+            cursor: crosshair;
+            width: 100%; height: 100%;
         }
 
-        .wolfram-display-container {
-            position: relative;
+        /* --- GENE / WOLFRAM AREA --- */
+        .wolfram-container {
+            display: flex; gap: 0; 
             margin-top: 10px;
+            height: 80px; /* Locked height via CSS */
+            background: var(--bg);
             border: 1px solid var(--border);
-            cursor: ns-resize;
+        }
+
+        .wolfram-canvas-box {
+            position: relative;
+            flex: 1;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
         }
 
         canvas#wolframCanvas {
-            width: 100%; height: 80px;
-            background: #020617;
+            width: 100%; height: 100%;
             image-rendering: pixelated;
-            display: block;
-            cursor: crosshair;
+            display: block; cursor: crosshair;
+        }
+
+        /* Vertical slider for history */
+        .history-slider-box {
+            width: 20px; 
+            height: 100%;
+            display: flex; 
+            flex-direction: column; 
+            align-items: center;
+            background: var(--panel);
+            border-left: 1px solid var(--border);
+            position: relative;
+        }
+        
+        input[type=range][orient=vertical] {
+            writing-mode: bt-lr; /* IE */
+            -webkit-appearance: slider-vertical; /* WebKit */
+            width: 100%; height: 100%; padding: 0; margin: 0;
+            cursor: ns-resize;
+        }
+
+        .history-tooltip {
+            position: absolute;
+            right: 25px;
+            background: var(--accent);
+            color: white;
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            pointer-events: none;
+            white-space: nowrap;
+            display: none;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            z-index: 100;
         }
 
         /* --- INSPECTOR OVERLAY --- */
         .neighborhood-preview {
-            position: absolute;
-            bottom: 20px; left: 20px;
-            background: rgba(15, 23, 42, 0.9);
+            position: absolute; 
+            bottom: 10px; left: 10px;
+            background: rgba(15, 23, 42, 0.7); /* Transparent bg */
             border: 1px solid var(--border);
-            padding: 10px;
-            border-radius: 6px;
-            pointer-events: none;
-            display: none;
+            backdrop-filter: blur(2px);
+            padding: 8px; border-radius: 4px; pointer-events: none;
+            display: none; 
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            z-index: 50;
         }
         
-        .nb-grid {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;
-            margin-bottom: 5px;
-        }
-        .nb-cell { width: 12px; height: 12px; background: #334155; }
-        .nb-cell.on { background: #bae6fd; box-shadow: 0 0 4px #bae6fd; }
-        .nb-cell.center { border: 1px solid var(--accent); }
+        .nb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-bottom: 5px; }
+        .nb-cell { width: 10px; height: 10px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+        .nb-cell.on { background: var(--accent); box-shadow: 0 0 4px var(--accent); border-color: var(--accent); }
+        .nb-cell.center { border: 1px solid var(--text-head); }
 
-        /* --- RULE BITS --- */
-        .rule-grid {
-            display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px;
-            margin-top: 15px;
+        /* --- CONTROLS CSS --- */
+        .control-block { padding: 15px; border-bottom: 1px solid var(--border); background: var(--panel); }
+        h2 { margin: 0 0 12px 0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-head); }
+        button {
+            background: var(--panel); border: 1px solid var(--border); color: var(--text-head);
+            padding: 4px 10px; cursor: pointer; border-radius: 4px;
+            font-family: inherit; transition: all 0.2s; font-size: 11px; text-transform: uppercase;
         }
+        button:hover { background: var(--border); transform: translateY(-1px); }
+        button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        button.primary:hover { box-shadow: 0 0 10px var(--accent-glow); background: var(--accent); }
+        button.lock-btn { border-color: var(--lock-on); color: var(--lock-on); background: transparent; }
+        button.lock-btn:hover { background: rgba(74, 222, 128, 0.1); }
+        button.icon-btn { padding: 4px 8px; font-size: 10px; }
+        button.del-btn { border-color: var(--stop); color: var(--stop); background: transparent; }
+        
+        input[type="range"] { width: 100%; cursor: pointer; }
+        input[type="number"], input[type="text"], select {
+            background: var(--bg); border: 1px solid var(--border); color: var(--text-head);
+            padding: 4px; border-radius: 4px; font-family: monospace; font-size: 11px;
+        }
+        
+        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .sub-text { font-size: 10px; color: var(--text); line-height: 1.4; margin-bottom: 10px; opacity: 0.8; }
+        
+        /* Rule Bits */
+        .rule-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-top: 15px; }
         .rule-bit {
             display: flex; flex-direction: column; align-items: center;
             cursor: pointer; padding: 6px 2px;
             background: rgba(255,255,255,0.03); border: 1px solid transparent; border-radius: 4px;
         }
-        .rule-bit:hover { background: rgba(255,255,255,0.1); }
-        .rule-bit.active { border-color: var(--accent); background: rgba(99, 102, 241, 0.1); }
-        
+        .rule-bit.active { border-color: var(--accent); background: var(--accent-glow); }
         .bit-pattern { display: flex; gap: 1px; margin-bottom: 6px; }
-        .bit-cell { width: 4px; height: 4px; background: #475569; }
-        .bit-cell.on { background: #e2e8f0; }
-        
-        .bit-val { font-size: 10px; color: #64748b; font-weight: bold; }
+        .bit-cell { width: 4px; height: 4px; background: var(--border); }
+        .bit-cell.on { background: var(--text); }
+        .bit-val { font-size: 10px; color: var(--text); font-weight: bold; }
         .rule-bit.active .bit-val { color: var(--accent); }
 
-        /* --- UTILS --- */
-        .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .sub-text { font-size: 11px; color: #64748b; line-height: 1.4; margin-bottom: 10px; }
-        .info-pill { 
-            font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.3);
-            border: 1px solid #334155;
+        /* Presets */
+        .preset-list {
+            display: flex; flex-direction: column; gap: 4px; margin-top: 10px;
+            max-height: 100px; overflow-y: auto;
+            border: 1px solid var(--border); padding: 4px; border-radius: 4px;
+            background: rgba(0,0,0,0.1);
         }
+        .preset-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--panel); padding: 4px 8px; border-radius: 3px;
+            border: 1px solid transparent; cursor: pointer;
+        }
+        .preset-item:hover { border-color: var(--accent); }
     </style>
 </head>
 <body>
 
     <div class="viewport">
         <div class="header">
-            <span style="font-weight:bold; color:var(--accent)">ECA // 2D HYBRID v2.3</span>
-            <div style="display:flex; gap:10px;">
-                <label style="font-size:11px; color:#aaa">
-                    <input type="checkbox" id="wrap2dCheck" checked onchange="world.setWrap(this.checked)"> Wrap World
+            <span style="font-weight:bold; color:var(--accent); font-size:1.1em; letter-spacing:1px;">CELLULAR AUTOMATOMATA</span>
+            <div style="display:flex; gap:10px; align-items: center;">
+                <select id="themeSelect" onchange="setTheme(this.value)">
+                    <option value="cyber">Theme: Cyber</option>
+                    <option value="matrix">Theme: Matrix</option>
+                    <option value="magma">Theme: Magma</option>
+                    <option value="paper">Theme: Paper</option>
+                </select>
+                <div style="width:1px; height:20px; background:var(--border)"></div>
+                
+                <div style="display:flex; align-items:center; gap:5px" title="Paintbrush Size">
+                    <span>Brush:</span>
+                    <input type="number" id="brushSize" value="1" min="1" max="10" style="width:35px">
+                </div>
+
+                <div style="width:1px; height:20px; background:var(--border)"></div>
+
+                <label style="font-size:11px;">
+                    <input type="checkbox" id="wrap2dCheck" checked onchange="world.setWrap(this.checked)"> Wrap
                 </label>
-                <button onclick="world.randomize()">Randomize World</button>
-                <button onclick="world.clear()">Clear World</button>
+                <button onclick="world.randomize()">RND</button>
+                <button onclick="world.clear()">CLR</button>
+                <button class="primary" onclick="resetWorldCam()">Fit View</button>
             </div>
         </div>
-        <div class="world-wrapper" id="worldWrapper">
+        
+        <div class="world-wrapper" id="worldWrapper" oncontextmenu="return false;">
             <canvas id="worldCanvas" width="300" height="200"></canvas>
             
             <div id="nbPreview" class="neighborhood-preview">
-                <div style="color:#aaa; font-size:10px; margin-bottom:4px">INDEX: <span id="inspIndex" style="color:var(--text)">0</span></div>
+                <div style="font-size:10px; margin-bottom:4px; color:var(--text)">IDX: <span id="inspIndex" style="color:var(--text-head)">0</span></div>
                 <div class="nb-grid" id="nbGrid"></div>
-                <div style="color:#aaa; font-size:10px;">OUTCOME: <span id="inspOutcome" style="font-weight:bold">?</span></div>
+                <div style="font-size:10px; color:var(--text)">OUT: <span id="inspOutcome" style="font-weight:bold">?</span></div>
             </div>
         </div>
     </div>
@@ -203,7 +292,7 @@
             <div class="row">
                 <h2>Simulation</h2>
                 <div style="display:flex; gap:10px; align-items: center;">
-                    <span id="fpsDisplay" style="font-size:11px; color:#888">30 FPS</span>
+                    <span id="fpsDisplay" style="font-size:11px; opacity:0.7">30 FPS</span>
                     <button id="pauseBtn" class="primary" onclick="togglePause()">STOP</button>
                 </div>
             </div>
@@ -212,7 +301,7 @@
 
         <div class="control-block">
             <div class="row">
-                <h2>1D Gene Strip</h2>
+                <h2>Gene Strip (Mask)</h2>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <span id="genCount" style="font-size:11px; font-family:monospace">G:0</span>
                     <button id="pauseStripBtn" style="border-color:var(--warn); color:var(--warn); background:transparent" onclick="toggleStripPause()">Pause Gene</button>
@@ -220,41 +309,59 @@
             </div>
             
             <div class="sub-text">
-                <strong style="color:var(--text)">MOUSE CONTROLS (Top Row):</strong><br>
-                • <strong>Click:</strong> Toggle State<br>
-                • <strong>Shift+Click:</strong> Lock <span style="color:var(--lock-on)">ON</span> (Green)<br>
-                • <strong>Ctrl/Alt+Click:</strong> Lock <span style="color:var(--lock-off)">OFF</span> (Red)<br>
-                • <strong>Right Click:</strong> Unlock
+                <strong>ZOOM:</strong> Scroll (at cursor) | <strong>PAN:</strong> Middle/Left Drag<br>
+                <strong>2D:</strong> Right Click Erase | <strong>GENE:</strong> Click toggles
             </div>
             
             <div class="row" style="margin-top:10px; background:rgba(0,0,0,0.2); padding:5px; border-radius:4px;">
                 <div style="display:flex; flex-direction:column; gap:5px; width:100%">
                     <div class="row" style="margin:0">
-                        <label style="font-size:11px; color:#aaa">
-                            <input type="checkbox" id="wrap1dCheck" checked onchange="strip.setWrap(this.checked)"> Wrap Gene
+                        <label style="font-size:11px;">
+                            <input type="checkbox" id="wrap1dCheck" checked onchange="strip.setWrap(this.checked)"> Wrap
                         </label>
                         <div style="display:flex; align-items:center; gap:5px;">
-                            <span style="font-size:10px; color:#888;">DELAY:</span>
+                            <span style="font-size:10px;">DELAY:</span>
                             <input type="number" id="geneDelayInput" value="1" min="1" max="100" style="width:40px">
                         </div>
                     </div>
                     <div class="row" style="margin:0">
-                         <label style="font-size:11px; color:#aaa">Rnd Density:</label>
-                         <input type="range" id="stripDensity" min="0" max="100" value="5" style="width:60px">
+                         <span style="font-size:11px;">Rnd Density:</span>
+                         <input type="number" id="stripDensity" min="0" max="100" value="5" style="width:50px">
                     </div>
                 </div>
             </div>
 
             <div class="row" style="justify-content: flex-end; gap: 5px; flex-wrap:wrap">
-                <button onclick="strip.stabilize()" class="lock-btn" title="Lock Empty(0) and Full(511) to OFF to prevent flashing">Stabilize (Anti-Flash)</button>
+                <button onclick="strip.stabilize()" class="lock-btn">Stabilize</button>
                 <button onclick="randomizeStrip()">RND</button>
                 <button onclick="strip.seedCenter()">CTR</button>
                 <button onclick="strip.seedClear()">CLR</button>
-                <button onclick="strip.unlockAll()" style="font-size:10px">Unlock All</button>
+                <button onclick="strip.unlockAll()" style="font-size:10px">Unlk</button>
             </div>
 
-            <div class="wolfram-display-container" oncontextmenu="return false;">
-                <canvas id="wolframCanvas" width="512" height="60"></canvas>
+            <div class="wolfram-container" oncontextmenu="return false;">
+                <div class="wolfram-canvas-box" id="wolfWrapper">
+                    <canvas id="wolframCanvas" width="512" height="80"></canvas>
+                </div>
+                <div class="history-slider-box">
+                    <input type="range" orient="vertical" id="historySlider" min="0" max="79" value="79" oninput="updateHistoryUI()">
+                    <div id="historyTooltip" class="history-tooltip">0</div>
+                </div>
+            </div>
+            
+            <div class="row" style="margin-top:5px; justify-content: flex-end;">
+                 <button onclick="restoreHistory()" style="font-size:10px; width:100%">Restore Selected Row</button>
+            </div>
+
+            <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top:10px;">
+                <div class="row">
+                    <h3 style="margin:0; font-size:11px; color:var(--text)">Mask Presets</h3>
+                    <div style="display:flex; gap:5px">
+                        <input type="text" id="maskNameInput" placeholder="Name" style="width:70px">
+                        <button class="icon-btn primary" onclick="saveMaskPreset()">Save</button>
+                    </div>
+                </div>
+                <div id="maskPresetList" class="preset-list"></div>
             </div>
         </div>
 
@@ -270,17 +377,16 @@
             <div class="rule-grid" id="ruleGrid"></div>
 
             <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top:15px;">
-                <h3 style="font-size: 0.8rem; color: #64748b; margin-bottom:10px">Presets</h3>
-                <div style="display:flex; gap: 5px; flex-wrap: wrap;">
-                    <button onclick="setRule(30)">R30 (Chaos)</button>
-                    <button onclick="setRule(90)">R90 (Fractal)</button>
-                    <button onclick="setRule(110)">R110 (Comp)</button>
-                    <button onclick="setRule(184)">R184 (Flow)</button>
-                    <button onclick="setRule(73)">R73 (Wall)</button>
+                <div class="row">
+                    <h3 style="margin:0; font-size:11px; color:var(--text)">Rule Presets</h3>
+                    <div style="display:flex; gap:5px">
+                        <input type="text" id="ruleNameInput" placeholder="Name" style="width:70px">
+                        <button class="icon-btn primary" onclick="saveRulePreset()">Save</button>
+                    </div>
                 </div>
+                <div id="rulePresetList" class="preset-list"></div>
             </div>
         </div>
-
     </div>
 
     <script>
@@ -288,6 +394,7 @@
         const W = 300;
         const H = 200;
         const STRIP_LEN = 512; 
+        const HISTORY_LEN = 80; 
         
         /* --- STATE --- */
         let isPaused = false;
@@ -295,103 +402,161 @@
         let fps = 30;
         let ruleByte = 30;
         let geneUpdateCounter = 0;
+        let selectedHistoryIndex = 0; 
+        let geneDrawMode = 1; // 1 = Draw, 0 = Erase
         
+        /* --- HELPERS --- */
+        function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            if(hex.length === 3) hex = hex.split('').map(c=>c+c).join('');
+            const bigint = parseInt(hex, 16);
+            return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+        }
+        function getPalette() {
+            const dead = hexToRgb(getCssVar('--cell-dead'));
+            const alive = hexToRgb(getCssVar('--cell-alive'));
+            const colDead = (255 << 24) | (dead.b << 16) | (dead.g << 8) | dead.r;
+            const colAlive = (255 << 24) | (alive.b << 16) | (alive.g << 8) | alive.r;
+            return { colDead, colAlive };
+        }
+        function setTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            drawWorld(); drawWolfram();
+        }
+
+        /* --- CAMERA CLASS --- */
+        class Camera {
+            constructor(canvas, contentW, contentH) {
+                this.canvas = canvas;
+                this.cW = contentW; this.cH = contentH;
+                this.zoom = 1;
+                this.offsetX = 0; this.offsetY = 0;
+                this.isDragging = false;
+                this.lastX = 0; this.lastY = 0;
+                this.minZoom = 0.1;
+                this.maxZoom = 40;
+            }
+
+            resetToFit(mode = 'contain') {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                const scaleX = rect.width / this.cW;
+                const scaleY = rect.height / this.cH;
+                let fitScale;
+                if(mode === 'cover') {
+                    fitScale = Math.max(scaleX, scaleY) * 1.001; 
+                } else {
+                    fitScale = Math.min(scaleX, scaleY);
+                }
+                this.zoom = fitScale;
+                this.minZoom = fitScale; 
+                this.offsetX = (rect.width - this.cW * this.zoom) / 2;
+                this.offsetY = (rect.height - this.cH * this.zoom) / 2;
+            }
+
+            screenToWorld(sx, sy) {
+                const rect = this.canvas.getBoundingClientRect();
+                const cssX = sx - rect.left;
+                const cssY = sy - rect.top;
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                const internalX = cssX * scaleX;
+                const internalY = cssY * scaleY;
+                return {
+                    x: (internalX - this.offsetX) / this.zoom,
+                    y: (internalY - this.offsetY) / this.zoom
+                };
+            }
+
+            apply(ctx) {
+                ctx.save();
+                ctx.translate(this.offsetX, this.offsetY);
+                ctx.scale(this.zoom, this.zoom);
+            }
+            
+            constrain() {
+                const viewW = this.canvas.width;
+                const viewH = this.canvas.height;
+                const contentW = this.cW * this.zoom;
+                const contentH = this.cH * this.zoom;
+                
+                if (contentW > viewW) {
+                    if (this.offsetX > 0) this.offsetX = 0;
+                    if (this.offsetX < viewW - contentW) this.offsetX = viewW - contentW;
+                } else {
+                    this.offsetX = (viewW - contentW) / 2;
+                }
+
+                if (contentH > viewH) {
+                    if (this.offsetY > 0) this.offsetY = 0;
+                    if (this.offsetY < viewH - contentH) this.offsetY = viewH - contentH;
+                } else {
+                    this.offsetY = (viewH - contentH) / 2;
+                }
+            }
+        }
+
         /* --- 1D AUTOMATON --- */
         class Strip {
             constructor() {
                 this.cells = new Uint8Array(STRIP_LEN);
                 this.next = new Uint8Array(STRIP_LEN);
-                // 0: Unlocked, 1: Forced ON, 2: Forced OFF
                 this.locks = new Uint8Array(STRIP_LEN); 
                 this.history = [];
                 this.gen = 0;
                 this.wrap = true;
                 this.seedCenter();
             }
-
             setWrap(val) { this.wrap = val; }
-
             seedCenter() {
-                this.cells.fill(0);
-                // Preserve locks during reset? Let's say yes for now, 
-                // but ensure locked values are applied immediately
-                this.applyLocks();
-                if(this.locks[Math.floor(STRIP_LEN / 2)] === 0) {
-                     this.cells[Math.floor(STRIP_LEN / 2)] = 1; 
-                }
+                this.cells.fill(0); this.applyLocks();
+                if(this.locks[Math.floor(STRIP_LEN / 2)] === 0) this.cells[Math.floor(STRIP_LEN / 2)] = 1; 
                 this.resetHistory();
             }
-
             seedRandom(densityPercent) {
                 this.cells.fill(0);
                 for(let i=0; i<STRIP_LEN; i++) {
-                    if(this.locks[i] !== 0) continue; // Skip locked
+                    if(this.locks[i] !== 0) continue; 
                     if(Math.random() * 100 < densityPercent) this.cells[i] = 1;
                 }
-                this.applyLocks();
-                this.resetHistory();
+                this.applyLocks(); this.resetHistory();
             }
-
-            seedClear() {
-                this.cells.fill(0);
-                this.applyLocks();
-                this.resetHistory();
+            seedClear() { this.cells.fill(0); this.applyLocks(); this.resetHistory(); }
+            loadMask(maskData) {
+                for(let i=0; i<STRIP_LEN; i++) this.cells[i] = maskData[i] ? 1 : 0;
+                this.applyLocks(); this.resetHistory();
             }
-
-            // New feature: Lock edges to 0 to prevent flashing
-            stabilize() {
-                this.locks[0] = 2; // Lock Index 0 (empty neighborhood) to OFF
-                this.locks[STRIP_LEN-1] = 2; // Lock Index 511 (full neighborhood) to OFF
-                this.applyLocks();
-            }
-
-            unlockAll() {
-                this.locks.fill(0);
-            }
-
+            stabilize() { this.locks[0] = 2; this.locks[STRIP_LEN-1] = 2; this.applyLocks(); drawWolfram(); }
+            unlockAll() { this.locks.fill(0); drawWolfram(); }
             applyLocks() {
                 for(let i=0; i<STRIP_LEN; i++) {
                     if(this.locks[i] === 1) this.cells[i] = 1;
                     if(this.locks[i] === 2) this.cells[i] = 0;
                 }
             }
-
             resetHistory() {
-                this.history = new Array(60).fill(null).map(() => new Uint8Array(STRIP_LEN));
+                this.history = new Array(HISTORY_LEN).fill(null).map(() => new Uint8Array(STRIP_LEN));
                 this.history[0].set(this.cells);
                 this.gen = 0;
             }
-
             evolve() {
                 for (let i = 0; i < STRIP_LEN; i++) {
-                    // Check Locks First
-                    if (this.locks[i] === 1) {
-                        this.next[i] = 1;
-                        continue;
-                    }
-                    if (this.locks[i] === 2) {
-                        this.next[i] = 0;
-                        continue;
-                    }
-
+                    if (this.locks[i] === 1) { this.next[i] = 1; continue; }
+                    if (this.locks[i] === 2) { this.next[i] = 0; continue; }
                     let leftVal = 0, rightVal = 0;
-
                     if (this.wrap) {
                         leftVal = this.cells[(i - 1 + STRIP_LEN) % STRIP_LEN];
                         rightVal = this.cells[(i + 1) % STRIP_LEN];
                     } else {
-                        const li = i - 1;
-                        const ri = i + 1;
+                        const li = i - 1; const ri = i + 1;
                         leftVal = (li < 0) ? 0 : this.cells[li];
                         rightVal = (ri >= STRIP_LEN) ? 0 : this.cells[ri];
                     }
-
                     const center = this.cells[i];
                     const pattern = (leftVal << 2) | (center << 1) | rightVal;
                     this.next[i] = (ruleByte >> pattern) & 1;
                 }
                 [this.cells, this.next] = [this.next, this.cells];
-                
                 this.history.pop();
                 this.history.unshift(new Uint8Array(this.cells));
                 this.gen++;
@@ -407,31 +572,20 @@
                 this.wrap = true;
                 this.randomize();
             }
-
             setWrap(val) { this.wrap = val; }
-
-            randomize() {
-                for(let i=0; i<this.data.length; i++) this.data[i] = Math.random() > 0.85 ? 1 : 0;
-            }
-            
+            randomize() { for(let i=0; i<this.data.length; i++) this.data[i] = Math.random() > 0.85 ? 1 : 0; }
             clear() { this.data.fill(0); }
-
             getNeighborhood(x, y) {
-                let index = 0;
-                let bitPos = 8;
+                let index = 0; let bitPos = 8;
                 for (let dy = -1; dy <= 1; dy++) {
                     for (let dx = -1; dx <= 1; dx++) {
                         let ny, nx, val = 0;
                         if (this.wrap) {
-                            ny = (y + dy + this.h) % this.h;
-                            nx = (x + dx + this.w) % this.w;
+                            ny = (y + dy + this.h) % this.h; nx = (x + dx + this.w) % this.w;
                             val = this.data[ny * this.w + nx];
                         } else {
-                            ny = y + dy;
-                            nx = x + dx;
-                            if (ny >= 0 && ny < this.h && nx >= 0 && nx < this.w) {
-                                 val = this.data[ny * this.w + nx];
-                            }
+                            ny = y + dy; nx = x + dx;
+                            if (ny >= 0 && ny < this.h && nx >= 0 && nx < this.w) val = this.data[ny * this.w + nx];
                         }
                         if (val === 1) index |= (1 << bitPos);
                         bitPos--;
@@ -439,32 +593,22 @@
                 }
                 return index;
             }
-
             update(controllerStrip) {
-                const d = this.data;
-                const n = this.next;
-                const w = this.w;
-                const h = this.h;
+                const d = this.data; const n = this.next;
+                const w = this.w; const h = this.h;
                 const strip = controllerStrip.cells;
-
                 for (let y = 0; y < h; y++) {
                     for (let x = 0; x < w; x++) {
-                        let index = 0;
-                        let bitPos = 8;
-                        
+                        let index = 0; let bitPos = 8;
                         for (let dy = -1; dy <= 1; dy++) {
                             for (let dx = -1; dx <= 1; dx++) {
                                 let ny, nx, val = 0;
                                 if (this.wrap) {
-                                    ny = (y + dy + h) % h;
-                                    nx = (x + dx + w) % w;
+                                    ny = (y + dy + h) % h; nx = (x + dx + w) % w;
                                     val = d[ny * w + nx];
                                 } else {
-                                    ny = y + dy;
-                                    nx = x + dx;
-                                    if(ny >= 0 && ny < h && nx >= 0 && nx < w) {
-                                         val = d[ny * w + nx];
-                                    }
+                                    ny = y + dy; nx = x + dx;
+                                    if(ny >= 0 && ny < h && nx >= 0 && nx < w) val = d[ny * w + nx];
                                 }
                                 if (val === 1) index |= (1 << bitPos);
                                 bitPos--;
@@ -481,300 +625,333 @@
         const strip = new Strip();
         const world = new World(W, H);
 
-        /* --- RENDERERS --- */
-        const worldCtx = document.getElementById('worldCanvas').getContext('2d');
-        const wolframCtx = document.getElementById('wolframCanvas').getContext('2d');
-        const worldImgData = worldCtx.createImageData(W, H);
-        const wolframImgData = wolframCtx.createImageData(512, 60);
+        /* --- CANVAS & CAMS --- */
+        const worldCvs = document.getElementById('worldCanvas');
+        const worldCtx = worldCvs.getContext('2d');
+        const worldCam = new Camera(worldCvs, W, H);
 
+        const wolfCvs = document.getElementById('wolframCanvas');
+        const wolfCtx = wolfCvs.getContext('2d');
+        const wolfCam = new Camera(wolfCvs, 512, 80); 
+
+        // Offscreen buffers
+        const worldBuffer = document.createElement('canvas'); worldBuffer.width = W; worldBuffer.height = H;
+        const worldBufCtx = worldBuffer.getContext('2d');
+        const worldImgData = worldBufCtx.createImageData(W, H);
+
+        const wolfBuffer = document.createElement('canvas'); wolfBuffer.width = 512; wolfBuffer.height = 80;
+        const wolfBufCtx = wolfBuffer.getContext('2d');
+        const wolfImgData = wolfBufCtx.createImageData(512, 80);
+
+        function resetWorldCam() {
+            worldCam.resetToFit('cover');
+            wolfCam.resetToFit('cover');
+            drawWorld(); drawWolfram();
+        }
+
+        const resizeObserver = new ResizeObserver(() => {
+            const wRect = document.getElementById('worldWrapper').getBoundingClientRect();
+            worldCvs.width = wRect.width; worldCvs.height = wRect.height;
+            const wfRect = document.getElementById('wolfWrapper').getBoundingClientRect();
+            wolfCvs.width = wfRect.width; wolfCvs.height = wfRect.height;
+            worldCam.resetToFit('cover'); 
+            wolfCam.resetToFit('cover');
+            drawWorld(); drawWolfram();
+        });
+        resizeObserver.observe(document.getElementById('worldWrapper'));
+        resizeObserver.observe(document.getElementById('wolfWrapper'));
+
+        /* --- RENDER LOGIC --- */
         function drawWorld() {
             const buf = new Uint32Array(worldImgData.data.buffer);
-            const len = world.data.length;
-            // Palette: 
-            // Dead: 0xFF1e1b20 (Dark Slate/Blackish) -> ABGR 0xFF201B1E ? No, let's use HEX logic
-            // JS uses Little Endian usually. AABBGGRR.
-            // Dead: #020617 -> 0xFF170602
-            // Alive: #38bdf8 (Sky Blue 400) -> 0xFFF8BD38
-            
-            const colDead = 0xFF170602; 
-            const colAlive = 0xFFF8BD38;
+            const { colDead, colAlive } = getPalette();
+            for(let i=0; i<world.data.length; i++) buf[i] = world.data[i] ? colAlive : colDead; 
+            worldBufCtx.putImageData(worldImgData, 0, 0);
 
-            for(let i=0; i<len; i++) {
-                buf[i] = world.data[i] ? colAlive : colDead; 
-            }
-            worldCtx.putImageData(worldImgData, 0, 0);
+            worldCtx.fillStyle = getCssVar('--cell-dead');
+            worldCtx.fillRect(0,0, worldCvs.width, worldCvs.height);
+            worldCam.apply(worldCtx);
+            worldCtx.imageSmoothingEnabled = false;
+            worldCtx.drawImage(worldBuffer, 0, 0);
+            worldCtx.restore();
         }
 
         function drawWolfram() {
-            const buf = new Uint32Array(wolframImgData.data.buffer);
-            for(let y=0; y<60; y++) {
+            wolfBufCtx.fillStyle = getCssVar('--bg');
+            wolfBufCtx.fillRect(0,0,512,80);
+
+            const buf = new Uint32Array(wolfImgData.data.buffer);
+            const dead = hexToRgb(getCssVar('--bg'));
+            const colOn = 0xFFFFFFFF;
+            const colOff = (255 << 24) | (dead.b+20 << 16) | (dead.g+20 << 8) | (dead.r+20);
+            
+            for(let y=0; y<HISTORY_LEN; y++) {
                 const row = strip.history[y];
                 if(!row) continue;
-                
-                const isActiveRow = (y === 0);
-
                 for(let x=0; x<512; x++) {
                     const val = row[x];
-                    let col = 0xFF000000;
-                    
-                    if(isActiveRow) {
-                        // Check locks for coloring
-                        const lock = strip.locks[x];
-                        
-                        if (val) col = 0xFFFFFFFF; // White for ON
-                        else col = 0xFF222222;    // Dark Grey for OFF
-                        
-                        // Overlay Lock Colors (Subtle tint or bar)
-                        // Note: putImageData doesn't support transparency blending well manually without cost
-                        // We will draw locks as a separate pass using fillRect for clarity
-                    } else {
-                        // Fading History - Softer colors (Cyan/Teal fade)
-                        // #0ea5e9 to dark
-                        const fade = Math.max(10, 180 - (y*3));
-                        if(val) {
-                            // ABGR
-                            col = (255 << 24) | (200 << 16) | (165 << 8) | 14; 
-                        } else {
-                            col = 0xFF050505;
-                        }
+                    let col;
+                    if(y === 0) col = val ? colOn : colOff; 
+                    else {
+                        const fade = Math.max(0, 255 - (y*3)); 
+                        if(val) col = (255 << 24) | (fade << 16) | (fade/1.2 << 8) | 0; 
+                        else col = (255<<24) | 0x050505;
                     }
                     buf[y*512 + x] = col;
                 }
             }
-            wolframCtx.putImageData(wolframImgData, 0, 0);
+            wolfBufCtx.putImageData(wolfImgData, 0, 0);
 
-            // Draw Lock Indicators on top row
+            const lockOnRGB = hexToRgb(getCssVar('--lock-on'));
+            const lockOffRGB = hexToRgb(getCssVar('--lock-off'));
             for(let x=0; x<512; x++) {
                 const lock = strip.locks[x];
-                if(lock === 1) { // Forced ON
-                    wolframCtx.fillStyle = '#4ade80';
-                    wolframCtx.fillRect(x, 0, 1, 2); // Top bar
-                    wolframCtx.fillRect(x, 0, 1, 1); // Ensure white pixel is covered slightly or tinted
-                } else if(lock === 2) { // Forced OFF
-                    wolframCtx.fillStyle = '#ef4444';
-                    wolframCtx.fillRect(x, 0, 1, 2);
+                if(lock === 1) { 
+                    wolfBufCtx.fillStyle = `rgb(${lockOnRGB.r},${lockOnRGB.g},${lockOnRGB.b})`;
+                    wolfBufCtx.fillRect(x, 0, 1, 2); 
+                } else if(lock === 2) { 
+                    wolfBufCtx.fillStyle = `rgb(${lockOffRGB.r},${lockOffRGB.g},${lockOffRGB.b})`;
+                    wolfBufCtx.fillRect(x, 0, 1, 2);
                 }
             }
+
+            if(selectedHistoryIndex > 0) {
+                 wolfBufCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
+                 wolfBufCtx.fillRect(0, selectedHistoryIndex, 512, 1);
+            }
+
+            wolfCtx.fillStyle = getCssVar('--bg');
+            wolfCtx.fillRect(0,0, wolfCvs.width, wolfCvs.height);
+            wolfCam.apply(wolfCtx);
+            wolfCtx.imageSmoothingEnabled = false;
+            wolfCtx.drawImage(wolfBuffer, 0, 0);
+            wolfCtx.restore();
         }
 
+        /* --- PRESETS --- */
+        let rulePresets = [{name: "Chaos", val: 30}, {name: "Fractal", val: 90}, {name: "Comp", val: 110}, {name: "Flow", val: 184}, {name: "Wall", val: 73}];
+        function renderRulePresets() {
+            const list = document.getElementById('rulePresetList'); list.innerHTML = '';
+            rulePresets.forEach((p, idx) => {
+                const item = document.createElement('div'); item.className = 'preset-item';
+                item.innerHTML = `<span class="preset-name" onclick="setRule(${p.val})">${p.name} (${p.val})</span><button class="icon-btn del-btn" onclick="deleteRulePreset(${idx})">×</button>`;
+                list.appendChild(item);
+            });
+        }
+        function saveRulePreset() { rulePresets.push({ name: document.getElementById('ruleNameInput').value.trim() || "Custom", val: ruleByte }); renderRulePresets(); }
+        function deleteRulePreset(idx) { rulePresets.splice(idx, 1); renderRulePresets(); }
+
+        let maskPresets = [{ name: "Conway GoL", data: generateConwayMask() }];
+        function generateConwayMask() {
+            const mask = new Uint8Array(512);
+            for(let i=0; i<512; i++) {
+                const center = (i >> 4) & 1; let neighbors = 0;
+                for(let bit=0; bit<9; bit++) if(bit !== 4 && ((i >> bit) & 1)) neighbors++;
+                if(center === 1) mask[i] = (neighbors === 2 || neighbors === 3) ? 1 : 0; else mask[i] = (neighbors === 3) ? 1 : 0;
+            }
+            return Array.from(mask);
+        }
+        function renderMaskPresets() {
+            const list = document.getElementById('maskPresetList'); list.innerHTML = '';
+            maskPresets.forEach((p, idx) => {
+                const item = document.createElement('div'); item.className = 'preset-item';
+                item.innerHTML = `<span class="preset-name" onclick="loadMaskPreset(${idx})">${p.name}</span><button class="icon-btn del-btn" onclick="deleteMaskPreset(${idx})">×</button>`;
+                list.appendChild(item);
+            });
+        }
+        function saveMaskPreset() { maskPresets.push({ name: document.getElementById('maskNameInput').value.trim() || "Custom", data: Array.from(strip.cells) }); renderMaskPresets(); }
+        function loadMaskPreset(idx) {
+            strip.loadMask(maskPresets[idx].data);
+            if(maskPresets[idx].name.includes("Conway") && !isStripPaused) toggleStripPause();
+        }
+        function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
+
         /* --- UI & INTERACTION --- */
-        
         function buildRuleUI() {
-            const grid = document.getElementById('ruleGrid');
-            grid.innerHTML = '';
+            const grid = document.getElementById('ruleGrid'); grid.innerHTML = '';
             document.getElementById('ruleInput').value = ruleByte;
-            
             for(let i=7; i>=0; i--) {
                 const isActive = (ruleByte >> i) & 1;
-                const div = document.createElement('div');
-                div.className = `rule-bit ${isActive ? 'active' : ''}`;
-                div.onclick = () => toggleBit(i);
-                
-                let patHTML = '<div class="bit-pattern">';
-                patHTML += `<div class="bit-cell ${(i>>2)&1 ? 'on':''}"></div>`;
-                patHTML += `<div class="bit-cell ${(i>>1)&1 ? 'on':''}"></div>`;
-                patHTML += `<div class="bit-cell ${(i)&1 ? 'on':''}"></div>`;
-                patHTML += '</div>';
-
-                div.innerHTML = `${patHTML}<div class="bit-val">${isActive}</div>`;
+                const div = document.createElement('div'); div.className = `rule-bit ${isActive ? 'active' : ''}`;
+                div.onclick = () => { ruleByte ^= (1 << i); buildRuleUI(); };
+                div.innerHTML = `<div class="bit-pattern"><div class="bit-cell ${(i>>2)&1?'on':''}"></div><div class="bit-cell ${(i>>1)&1?'on':''}"></div><div class="bit-cell ${(i)&1?'on':''}"></div></div><div class="bit-val">${isActive}</div>`;
                 grid.appendChild(div);
             }
         }
-
-        function toggleBit(bit) {
-            ruleByte ^= (1 << bit);
-            buildRuleUI();
-        }
-
-        function setRule(n) {
-            ruleByte = n;
-            buildRuleUI();
-        }
-
-        function randomizeRule() {
-            setRule(Math.floor(Math.random() * 256));
-        }
-
-        function setRuleFromInput(val) {
-            let n = parseInt(val);
-            if(isNaN(n)) n = 0;
-            n = Math.max(0, Math.min(255, n));
-            setRule(n);
-        }
-
-        /* --- STRIP CONTROLS --- */
-        function randomizeStrip() {
-            const density = parseInt(document.getElementById('stripDensity').value);
-            strip.seedRandom(density);
-        }
-
-        /* --- SIM CONTROLS --- */
-        function togglePause() {
-            isPaused = !isPaused;
-            const btn = document.getElementById('pauseBtn');
-            btn.innerText = isPaused ? "START" : "STOP";
-            btn.className = isPaused ? "run" : "primary";
-            btn.style.backgroundColor = isPaused ? "var(--run)" : "var(--stop)";
-            btn.style.borderColor = isPaused ? "var(--run)" : "var(--stop)";
-        }
-
-        function toggleStripPause() {
-            isStripPaused = !isStripPaused;
-            const btn = document.getElementById('pauseStripBtn');
-            btn.innerText = isStripPaused ? "Resume Gene" : "Pause Gene";
-            if(isStripPaused) {
-                btn.style.color = "var(--text)";
-                btn.style.borderColor = "var(--text)";
-            }
-            else {
-                btn.style.color = "var(--warn)";
-                btn.style.borderColor = "var(--warn)";
-            }
-        }
-
-        document.getElementById('speedRange').addEventListener('input', (e) => {
-            fps = parseInt(e.target.value);
-            document.getElementById('fpsDisplay').innerText = fps + " FPS";
-        });
-
-        /* --- MOUSE DRAWING & INSPECTION --- */
-        let isDrawing = false;
-        let isDrawingStrip = false;
+        function setRule(n) { ruleByte = n; buildRuleUI(); }
+        function randomizeRule() { setRule(Math.floor(Math.random() * 256)); }
+        function setRuleFromInput(val) { setRule(Math.max(0, Math.min(255, parseInt(val)||0))); }
+        function randomizeStrip() { strip.seedRandom(parseInt(document.getElementById('stripDensity').value)); }
+        function togglePause() { isPaused = !isPaused; document.getElementById('pauseBtn').innerText = isPaused ? "START" : "STOP"; }
+        function toggleStripPause() { isStripPaused = !isStripPaused; document.getElementById('pauseStripBtn').innerText = isStripPaused ? "Resume Gene" : "Pause Gene"; }
+        document.getElementById('speedRange').addEventListener('input', (e) => { fps = parseInt(e.target.value); document.getElementById('fpsDisplay').innerText = fps + " FPS"; });
         
-        const worldCvs = document.getElementById('worldCanvas');
-        const wolfCvs = document.getElementById('wolframCanvas');
-        const nbPreview = document.getElementById('nbPreview');
-        const nbGrid = document.getElementById('nbGrid');
-        const inspIndex = document.getElementById('inspIndex');
-        const inspOutcome = document.getElementById('inspOutcome');
+        function updateHistoryUI() {
+            const rawVal = parseInt(document.getElementById('historySlider').value);
+            selectedHistoryIndex = (HISTORY_LEN - 1) - rawVal;
+            const tooltip = document.getElementById('historyTooltip');
+            tooltip.innerText = selectedHistoryIndex === 0 ? "Now" : `G: -${selectedHistoryIndex}`;
+            tooltip.style.display = 'block';
+            const pct = 100 - (rawVal / (HISTORY_LEN - 1) * 100);
+            tooltip.style.top = pct + "%";
+            drawWolfram();
+        }
+        
+        document.getElementById('historySlider').addEventListener('mouseup', () => { document.getElementById('historyTooltip').style.display = 'none'; });
+        document.getElementById('historySlider').addEventListener('touchend', () => { document.getElementById('historyTooltip').style.display = 'none'; });
 
-        // Helper for mouse pos
-        const getPos = (e, canvas) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            return {
-                x: Math.floor((e.clientX - rect.left) * scaleX),
-                y: Math.floor((e.clientY - rect.top) * scaleY)
-            };
+        function restoreHistory() {
+            if(selectedHistoryIndex < strip.history.length && strip.history[selectedHistoryIndex]) {
+                strip.cells.set(strip.history[selectedHistoryIndex]);
+                if(!isStripPaused) toggleStripPause();
+                drawWolfram();
+            }
         }
 
-        // --- World Interactions ---
-        const paintWorld = (e) => {
-            const {x, y} = getPos(e, worldCvs);
-            for(let dy=-1; dy<=1; dy++) {
-                for(let dx=-1; dx<=1; dx++) {
-                    if (x+dx>=0 && x+dx<W && y+dy>=0 && y+dy<H) {
-                        world.data[(y+dy)*W + (x+dx)] = 1;
-                    }
+        /* --- MOUSE EVENTS --- */
+        function attachCamEvents(canvas, cam, paintFn, hoverFn) {
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -1 : 1;
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const wPosBefore = cam.screenToWorld(e.clientX, e.clientY);
+                const newZoom = Math.min(cam.maxZoom, Math.max(cam.minZoom, cam.zoom * (1 + delta * 0.1)));
+                cam.zoom = newZoom;
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const internalX = mouseX * scaleX;
+                const internalY = mouseY * scaleY;
+                cam.offsetX = internalX - (wPosBefore.x * cam.zoom);
+                cam.offsetY = internalY - (wPosBefore.y * cam.zoom);
+                cam.constrain(); 
+                drawWorld(); drawWolfram();
+            });
+
+            canvas.addEventListener('mousedown', (e) => {
+                const canPan = cam.zoom > (cam.minZoom + 0.001);
+                if((e.button === 1 || (e.button === 0 && e.code === 'Space')) && canPan) {
+                    cam.isDragging = true; cam.lastX = e.clientX; cam.lastY = e.clientY;
+                    e.preventDefault();
+                } else if(e.button === 0 || e.button === 2) { // Allow Right click (2) start
+                    paintFn(e, cam, true);
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if(cam.isDragging) {
+                    const rect = cam.canvas.getBoundingClientRect();
+                    const scaleX = cam.canvas.width / rect.width;
+                    const scaleY = cam.canvas.height / rect.height;
+                    const dx = (e.clientX - cam.lastX) * scaleX;
+                    const dy = (e.clientY - cam.lastY) * scaleY;
+                    cam.offsetX += dx; 
+                    cam.offsetY += dy;
+                    cam.lastX = e.clientX; cam.lastY = e.clientY;
+                    cam.constrain(); 
+                    drawWorld(); drawWolfram();
+                }
+            });
+            window.addEventListener('mouseup', () => { cam.isDragging = false; });
+            canvas.addEventListener('mousemove', (e) => {
+                if(!cam.isDragging && e.buttons > 0) paintFn(e, cam, false);
+                if(hoverFn) hoverFn(e, cam);
+            });
+        }
+
+        let lastMousePos = {x: -1, y: -1, onWorld: false};
+
+        const paintWorldAction = (e, cam, isStart) => {
+            // Right click (2) erases (0), Left click (1) draws (1)
+            const val = (e.buttons === 2 || (e.buttons === 0 && e.button === 2)) ? 0 : 1;
+            
+            const p = cam.screenToWorld(e.clientX, e.clientY);
+            const x = Math.floor(p.x); const y = Math.floor(p.y);
+            const radius = parseInt(document.getElementById('brushSize').value) - 1;
+            for(let dy=-radius; dy<=radius; dy++) {
+                for(let dx=-radius; dx<=radius; dx++) {
+                    const tx = x + dx; const ty = y + dy;
+                    if (tx >= 0 && tx < W && ty >= 0 && ty < H) world.data[ty * W + tx] = val;
                 }
             }
             drawWorld();
         };
 
-        const inspectWorld = (e) => {
-            const {x, y} = getPos(e, worldCvs);
-            if(x < 0 || x >= W || y < 0 || y >= H) {
-                nbPreview.style.display = 'none';
-                return;
-            }
-
-            const index = world.getNeighborhood(x, y);
-            const outcome = strip.cells[index];
-
-            nbPreview.style.display = 'block';
-            inspIndex.innerText = index;
-            inspOutcome.innerText = outcome ? "LIVES" : "DIES";
-            inspOutcome.style.color = outcome ? "var(--run)" : "var(--stop)";
-
-            nbGrid.innerHTML = '';
-            for(let i=8; i>=0; i--) {
+        const updateInspector = () => {
+             const {x, y} = lastMousePos;
+             if(!lastMousePos.onWorld || x < 0 || x >= W || y < 0 || y >= H) {
+                 document.getElementById('nbPreview').style.display = 'none'; return;
+             }
+             const index = world.getNeighborhood(x, y);
+             const outcome = strip.cells[index];
+             document.getElementById('nbPreview').style.display = 'block';
+             document.getElementById('inspIndex').innerText = index;
+             const outSpan = document.getElementById('inspOutcome');
+             outSpan.innerText = outcome ? "LIVES" : "DIES";
+             outSpan.style.color = outcome ? "var(--run)" : "var(--stop)";
+             
+             const grid = document.getElementById('nbGrid'); grid.innerHTML = '';
+             for(let i=8; i>=0; i--) {
                 const isOn = (index >> i) & 1;
                 const d = document.createElement('div');
                 d.className = `nb-cell ${isOn ? 'on' : ''} ${i===4 ? 'center':''}`;
-                nbGrid.appendChild(d);
-            }
-        }
+                grid.appendChild(d);
+             }
+        };
 
-        worldCvs.addEventListener('mousedown', (e) => { isDrawing = true; paintWorld(e); });
-        worldCvs.addEventListener('mousemove', (e) => { 
-            if(isDrawing) paintWorld(e); 
-            else inspectWorld(e);
-        });
-        worldCvs.addEventListener('mouseleave', () => nbPreview.style.display = 'none');
-        
-        // --- Strip Interactions (Painting & Locking) ---
-        const interactStrip = (e) => {
-            const {x, y} = getPos(e, wolfCvs);
+        const hoverWorldAction = (e, cam) => {
+            const p = cam.screenToWorld(e.clientX, e.clientY);
+            lastMousePos = { x: Math.floor(p.x), y: Math.floor(p.y), onWorld: true };
+            updateInspector();
+        };
+
+        worldCvs.addEventListener('mouseleave', () => { lastMousePos.onWorld = false; updateInspector(); });
+
+        const paintStripAction = (e, cam, isStart) => {
+            const p = cam.screenToWorld(e.clientX, e.clientY);
+            const x = Math.floor(p.x);
             if(x >= 0 && x < STRIP_LEN) {
-                // Determine Action based on keys/buttons
-                if (e.buttons === 2) { // Right Click
-                    strip.locks[x] = 0; // Unlock
-                    // Just visual update, actual value determined by sim next frame
-                } else if (e.shiftKey) { // Shift + Left
-                    strip.locks[x] = 1; // Force ON
-                    strip.cells[x] = 1; 
-                } else if (e.ctrlKey || e.altKey) { // Ctrl/Alt + Left
-                    strip.locks[x] = 2; // Force OFF
-                    strip.cells[x] = 0;
-                } else if (e.buttons === 1) { // Normal Left
-                     // Only toggle/paint if not locked? 
-                     // Let's allow painting to override visual, but lock holds next frame
-                     // For pure painting, we just set cell to 1
-                     if(strip.locks[x] === 0) strip.cells[x] = 1;
+                // Determine Draw Mode based on initial click
+                if(isStart && (e.buttons === 1 || e.button === 0)) {
+                    geneDrawMode = strip.cells[x] ? 0 : 1; // Toggle: If on, mode becomes erase
                 }
-
+                
+                if (e.shiftKey) { strip.locks[x] = 1; strip.cells[x] = 1; } 
+                else if (e.altKey || e.ctrlKey) { strip.locks[x] = 2; strip.cells[x] = 0; }
+                else if ((e.buttons === 1 || e.button === 0) && strip.locks[x] === 0) {
+                    strip.cells[x] = geneDrawMode;
+                }
+                
                 strip.history[0][x] = strip.cells[x];
                 drawWolfram();
             }
-        }
+        };
 
-        wolfCvs.addEventListener('mousedown', (e) => { 
-            isDrawingStrip = true; 
-            interactStrip(e); 
-        });
-        wolfCvs.addEventListener('mousemove', (e) => { 
-            if(isDrawingStrip) interactStrip(e); 
-        });
-        
-        window.addEventListener('mouseup', () => {
-            isDrawing = false;
-            isDrawingStrip = false;
-        });
+        attachCamEvents(worldCvs, worldCam, paintWorldAction, hoverWorldAction);
+        attachCamEvents(wolfCvs, wolfCam, paintStripAction, null);
 
         /* --- LOOP --- */
         let lastTime = 0;
-        
         function loop(time) {
+            if(lastMousePos.onWorld) updateInspector();
             if (!isPaused && time - lastTime > 1000 / fps) {
-                
-                // 1. Update World (Every frame)
                 world.update(strip);
-                
-                // 2. Logic to delay Strip update based on input
                 geneUpdateCounter++;
                 const delay = parseInt(document.getElementById('geneDelayInput').value) || 1;
-
                 if(geneUpdateCounter >= delay) {
-                    if(!isStripPaused) {
-                        strip.evolve();
-                        document.getElementById('genCount').innerText = "G:" + strip.gen;
-                    } else {
-                        // Even if paused, we ensure locks are applied
-                        strip.applyLocks();
-                    }
+                    if(!isStripPaused) { strip.evolve(); document.getElementById('genCount').innerText = "G:" + strip.gen; } 
+                    else strip.applyLocks();
                     geneUpdateCounter = 0;
                 }
-                
                 lastTime = time;
             }
-            
-            drawWorld();
-            drawWolfram();
+            drawWorld(); drawWolfram();
             requestAnimationFrame(loop);
         }
 
-        buildRuleUI();
+        setTimeout(resetWorldCam, 100); 
+        buildRuleUI(); renderRulePresets(); renderMaskPresets();
         requestAnimationFrame(loop);
 
     </script>
