@@ -451,6 +451,9 @@
                 const scaleX = rect.width / this.cW;
                 const scaleY = rect.height / this.cH;
                 let fitScale;
+                
+                // 'cover' zooms in until no empty space remains (crops content)
+                // 'contain' zooms out until all content is visible (letterboxing)
                 if(mode === 'cover') {
                     fitScale = Math.max(scaleX, scaleY) * 1.001; 
                 } else {
@@ -458,8 +461,7 @@
                 }
                 this.zoom = fitScale;
                 this.minZoom = fitScale; 
-                this.offsetX = (rect.width - this.cW * this.zoom) / 2;
-                this.offsetY = (rect.height - this.cH * this.zoom) / 2;
+                this.constrain(); // Force alignment immediately
             }
 
             screenToWorld(sx, sy) {
@@ -488,14 +490,19 @@
                 const contentW = this.cW * this.zoom;
                 const contentH = this.cH * this.zoom;
                 
-                if (contentW > viewW) {
+                // EPSILON: We treat content as "fitting" if it's within 0.1px of the view.
+                // This fixes the "offset to the left" bug when fully zoomed out.
+
+                // --- X AXIS ---
+                if (contentW > viewW + 0.1) {
                     if (this.offsetX > 0) this.offsetX = 0;
                     if (this.offsetX < viewW - contentW) this.offsetX = viewW - contentW;
                 } else {
                     this.offsetX = (viewW - contentW) / 2;
                 }
 
-                if (contentH > viewH) {
+                // --- Y AXIS ---
+                if (contentH > viewH + 0.1) {
                     if (this.offsetY > 0) this.offsetY = 0;
                     if (this.offsetY < viewH - contentH) this.offsetY = viewH - contentH;
                 } else {
@@ -653,17 +660,22 @@
 
         function resetWorldCam() {
             worldCam.resetToFit('cover');
-            wolfCam.resetToFit('cover');
+            // CHANGED: Use 'contain' for the gene strip to ensure centering
+            wolfCam.resetToFit('contain'); 
             drawWorld(); drawWolfram();
         }
 
         const resizeObserver = new ResizeObserver(() => {
             const wRect = document.getElementById('worldWrapper').getBoundingClientRect();
             worldCvs.width = wRect.width; worldCvs.height = wRect.height;
+            
             const wfRect = document.getElementById('wolfWrapper').getBoundingClientRect();
             wolfCvs.width = wfRect.width; wolfCvs.height = wfRect.height;
+            
             worldCam.resetToFit('cover'); 
-            wolfCam.resetToFit('cover');
+            // CHANGED: Use 'contain' here as well
+            wolfCam.resetToFit('contain');
+            
             drawWorld(); drawWolfram();
         });
         resizeObserver.observe(document.getElementById('worldWrapper'));
