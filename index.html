@@ -806,7 +806,11 @@
         function saveMaskPreset() { maskPresets.push({ name: document.getElementById('maskNameInput').value.trim() || "Custom", data: Array.from(strip.cells) }); renderMaskPresets(); }
         function loadMaskPreset(idx) {
             strip.loadMask(maskPresets[idx].data);
-            if(maskPresets[idx].name.includes("Conway") && !isStripPaused) toggleStripPause();
+            if (!isStripPaused) {
+                toggleStripPause();
+            }
+            strip.resetHistory();
+            drawWolfram(); 
         }
         function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
         
@@ -851,28 +855,10 @@
             reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    
-                    // Case 1: Rule Preset Import
-                    if (data.type === 'rule_preset') {
-                        rulePresets.push({ name: data.name, val: data.val });
-                        renderRulePresets();
-                        alert(`Imported Rule: ${data.name}`);
-                    }
-                    // Case 2: Mask Preset Import
-                    else if (data.type === 'mask_preset') {
+                    if (data.type === 'mask_preset') {
                         maskPresets.push({ name: data.name, data: data.data });
                         renderMaskPresets();
-                        alert(`Imported Mask: ${data.name}`);
                     }
-                    // Case 3: Full State Import (Fallback for legacy or explicit state)
-                    else {
-                        strip.loadData(data);
-                        if(data.rule !== undefined) {
-                            setRule(data.rule);
-                            document.getElementById('ruleInput').value = data.rule;
-                        }
-                    }
-                    // Reset file input so same file can be selected again if needed
                     input.value = '';
                 } catch(err) {
                     alert("Error parsing JSON file");
