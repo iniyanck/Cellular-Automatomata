@@ -109,7 +109,7 @@
                     <input type="checkbox" id="wrap2dCheck" checked onchange="world.setWrap(this.checked)"> Wrap
                 </label>
                 <label style="font-size:11px; margin-right:10px;">
-                    <input type="checkbox" id="ageCheck" onchange="toggleAgeMode(this.checked)"> Show Age
+                    <input type="checkbox" id="ageCheck" checked onchange="toggleAgeMode(this.checked)"> Show Age 
                 </label>
                 <button onclick="world.randomize()">RND</button>
                 <button onclick="world.clear()">CLR</button>
@@ -775,20 +775,12 @@
                 const item = document.createElement('div'); item.className = 'preset-item';
                 item.innerHTML = `
                 <span class="preset-name" onclick="setRule(${p.val})">${p.name} (${p.val})</span>
-                <button class="icon-btn exp-btn" onclick="exportRulePreset(${idx})" title="Export Rule">↓</button>
-                <button class="icon-btn del-btn" onclick="deleteRulePreset(${idx})" title="Delete">×</button>`;
+                                <button class="icon-btn del-btn" onclick="deleteRulePreset(${idx})" title="Delete">×</button>`;
                 list.appendChild(item);
             });
         }
         function saveRulePreset() { rulePresets.push({ name: document.getElementById('ruleNameInput').value.trim() || "Custom", val: ruleByte }); renderRulePresets(); }
         function deleteRulePreset(idx) { rulePresets.splice(idx, 1); renderRulePresets(); }
-        
-        // Export Rule Logic
-        function exportRulePreset(idx) {
-            const p = rulePresets[idx];
-            const data = { type: 'rule_preset', name: p.name, val: p.val };
-            downloadJSON(data, p.name + "_rule");
-        }
 
         let maskPresets = [{ name: "Conway GoL", data: generateConwayMask() }];
         function generateConwayMask() {
