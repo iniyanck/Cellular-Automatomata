@@ -46,11 +46,12 @@
 
         /* Paper Theme */
         [data-theme="paper"] {
-            --bg: #f8fafc; --panel: #ffffff; --text: #475569; --text-head: #0f172a;
-            --accent: #3b82f6; --accent-glow: rgba(59, 130, 246, 0.2);
-            --border: #e2e8f0; --run: #22c55e; --stop: #ef4444; --warn: #f59e0b;
+            --bg: #f8fafc; --panel: #ffffff; --text: #64748b; --text-head: #0f172a;
+            --accent: #2563eb; --accent-glow: rgba(37, 99, 235, 0.2);
+            --border: #cbd5e1; --run: #16a34a; --stop: #dc2626; --warn: #d97706;
             --lock-on: #15803d; --lock-off: #b91c1c;
-            --cell-dead: #ffffff; --cell-alive: #0f172a;
+            /* Important: Dead cell matches BG, Alive is high contrast */
+            --cell-dead: #f8fafc; --cell-alive: #1e293b; 
         }
 
         body {
@@ -303,6 +304,9 @@
                 <label style="font-size:11px;">
                     <input type="checkbox" id="wrap2dCheck" checked onchange="world.setWrap(this.checked)"> Wrap
                 </label>
+                <label style="font-size:11px; margin-right:10px;">
+                    <input type="checkbox" id="ageCheck" onchange="toggleAgeMode(this.checked)"> Show Age
+                </label>
                 <button onclick="world.randomize()">RND</button>
                 <button onclick="world.clear()">CLR</button>
                 <button class="primary" onclick="resetWorldCam()">Fit View</button>
@@ -480,6 +484,8 @@
         let geneDrawMode = 1; // 1 = Draw, 0 = Erase
         let lockMode = 0;
         let lastInspIndex = -1;
+        let showAge = false;
+        let ageLUT = new Uint32Array(256); // Lookup table for colors
         
         /* --- HELPERS --- */
         function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -496,8 +502,42 @@
             const colAlive = (255 << 24) | (alive.b << 16) | (alive.g << 8) | alive.r;
             return { colDead, colAlive };
         }
+        function updateAgeLUT() {
+            const alive = hexToRgb(getCssVar('--cell-alive'));
+            const dead = hexToRgb(getCssVar('--cell-dead'));
+            
+            // Helper to linear interpolate between two values
+            const lerp = (start, end, t) => Math.floor(start + (end - start) * t);
+
+            for (let i = 0; i < 256; i++) {
+                // If 0, it's dead
+                if (i === 0) {
+                    ageLUT[0] = (255 << 24) | (dead.b << 16) | (dead.g << 8) | dead.r;
+                    continue;
+                }
+
+                // Age 1 is freshest (t=0), Age 120 is oldest (t=1)
+                // We cap t at 1.0 so it doesn't overshoot
+                const maxAge = 120;
+                let t = (i - 1) / maxAge; 
+                if(t > 1) t = 1;
+
+                // Interpolate r, g, b from Alive -> Dead
+                // Note: As t goes 0->1, we go from Alive Color -> Dead Color
+                // To keep it visible, we might want to stop slightly before full dead color,
+                // but fully fading looks smoother. Let's cap at 80% fade.
+                t = t * 0.85; 
+
+                const r = lerp(alive.r, dead.r, t);
+                const g = lerp(alive.g, dead.g, t);
+                const b = lerp(alive.b, dead.b, t);
+
+                ageLUT[i] = (255 << 24) | (b << 16) | (g << 8) | r;
+            }
+        }
         function setTheme(themeName) {
             document.documentElement.setAttribute('data-theme', themeName);
+            updateAgeLUT();
             drawWorld(); drawWolfram();
         }
 
@@ -695,6 +735,7 @@
             setWrap(val) { this.wrap = val; }
             randomize() { for(let i=0; i<this.data.length; i++) this.data[i] = Math.random() > 0.85 ? 1 : 0; }
             clear() { this.data.fill(0); }
+            
             getNeighborhood(x, y) {
                 let index = 0; let bitPos = 8;
                 for (let dy = -1; dy <= 1; dy++) {
@@ -707,7 +748,7 @@
                             ny = y + dy; nx = x + dx;
                             if (ny >= 0 && ny < this.h && nx >= 0 && nx < this.w) val = this.data[ny * this.w + nx];
                         }
-                        if (val === 1) index |= (1 << bitPos);
+                        if (val > 0) index |= (1 << bitPos);
                         bitPos--;
                     }
                 }
@@ -717,8 +758,6 @@
                 const d = this.data; const n = this.next;
                 const w = this.w; const h = this.h;
                 
-                // Pre-calculate effective rule set from strip
-                // This accounts for Ghost Mode overrides
                 const ruleSet = new Uint8Array(512);
                 for(let i=0; i<512; i++) {
                     ruleSet[i] = controllerStrip.getRenderValue(i);
@@ -727,7 +766,6 @@
                 for (let y = 0; y < h; y++) {
                     for (let x = 0; x < w; x++) {
                         let index = 0; let bitPos = 8;
-                        // Manual loop unrolling for slight perf boost not strictly needed here but good practice
                         for (let dy = -1; dy <= 1; dy++) {
                             for (let dx = -1; dx <= 1; dx++) {
                                 let ny, nx, val = 0;
@@ -738,11 +776,28 @@
                                     ny = y + dy; nx = x + dx;
                                     if(ny >= 0 && ny < h && nx >= 0 && nx < w) val = d[ny * w + nx];
                                 }
-                                if (val === 1) index |= (1 << bitPos);
+                                // CHANGE: Logic check > 0
+                                if (val > 0) index |= (1 << bitPos);
                                 bitPos--;
                             }
                         }
-                        n[y * w + x] = ruleSet[index];
+                        
+                        // Result is 1 (Alive) or 0 (Dead) based on the strip
+                        const result = ruleSet[index]; 
+                        const currentVal = d[y * w + x];
+
+                        if (result === 1) {
+                            // CHANGE: Aging Logic
+                            // If it was already alive, increment age (cap at 255)
+                            if (currentVal > 0 && currentVal < 255) {
+                                n[y * w + x] = currentVal + 1;
+                            } else {
+                                // If it was dead (0) or max age (255), set/keep at 1 or 255
+                                n[y * w + x] = currentVal === 0 ? 1 : 255;
+                            }
+                        } else {
+                            n[y * w + x] = 0;
+                        }
                     }
                 }
                 [this.data, this.next] = [this.next, this.data];
@@ -795,8 +850,21 @@
         /* --- RENDER LOGIC --- */
         function drawWorld() {
             const buf = new Uint32Array(worldImgData.data.buffer);
-            const { colDead, colAlive } = getPalette();
-            for(let i=0; i<world.data.length; i++) buf[i] = world.data[i] ? colAlive : colDead; 
+            
+            if (showAge) {
+                // Use the Pre-calculated Gradient Lookup Table
+                for(let i=0; i<world.data.length; i++) {
+                    buf[i] = ageLUT[world.data[i]];
+                }
+            } else {
+                // Classic Logic (Binary)
+                const { colDead, colAlive } = getPalette();
+                // Note: Check > 0 here because data might contain age values even if mode is off
+                for(let i=0; i<world.data.length; i++) {
+                    buf[i] = world.data[i] > 0 ? colAlive : colDead; 
+                }
+            }
+            
             worldBufCtx.putImageData(worldImgData, 0, 0);
 
             worldCtx.fillStyle = getCssVar('--cell-dead');
@@ -807,50 +875,72 @@
             worldCtx.restore();
         }
 
+        function toggleAgeMode(val) {
+            showAge = val;
+            drawWorld();
+        }
+
         function drawWolfram() {
             wolfBufCtx.fillStyle = getCssVar('--bg');
             wolfBufCtx.fillRect(0,0,512,80);
 
             const buf = new Uint32Array(wolfImgData.data.buffer);
-            const dead = hexToRgb(getCssVar('--bg'));
-            const colOn = 0xFFFFFFFF;
-            const colOff = (255 << 24) | (dead.b+20 << 16) | (dead.g+20 << 8) | (dead.r+20);
             
+            // Get theme colors
+            const cAlive = hexToRgb(getCssVar('--cell-alive'));
+            const cDead = hexToRgb(getCssVar('--cell-dead')); // Or --bg
+            
+            // Pre-calculate packed integers for performance
+            // Full Alive Color
+            const colOn = (255 << 24) | (cAlive.b << 16) | (cAlive.g << 8) | cAlive.r;
+            
+            // Helper for fading trail colors
+            const lerp = (s, e, t) => Math.floor(s + (e - s) * t);
+
             for(let y=0; y<HISTORY_LEN; y++) {
                 const row = strip.history[y];
                 if(!row) continue;
+                
+                // Calculate fade for this row (older = closer to background)
+                let t = y / HISTORY_LEN;
+                // Cap fade so we can still see history
+                t = Math.min(0.8, t); 
+
+                // Calculate "Faded Alive" color for this row
+                const r = lerp(cAlive.r, cDead.r, t);
+                const g = lerp(cAlive.g, cDead.g, t);
+                const b = lerp(cAlive.b, cDead.b, t);
+                const colFaded = (255 << 24) | (b << 16) | (g << 8) | r;
+
+                // Calculate "Dead" color (usually just BG, but maybe slightly tinted if desired)
+                const colBg = (255 << 24) | (cDead.b << 16) | (cDead.g << 8) | cDead.r;
+
                 for(let x=0; x<512; x++) {
                     const val = row[x];
-                    let col;
-                    if(y === 0) col = val ? colOn : colOff; 
-                    else {
-                        const fade = Math.max(0, 255 - (y*3)); 
-                        if(val) col = (255 << 24) | (fade << 16) | (fade/1.2 << 8) | 0; 
-                        else col = (255<<24) | 0x050505;
+                    // If it's the current generation (y=0), use full brightness
+                    // Otherwise use the faded color
+                    if (val) {
+                        buf[y*512 + x] = (y === 0) ? colOn : colFaded;
+                    } else {
+                        buf[y*512 + x] = colBg;
                     }
-                    buf[y*512 + x] = col;
                 }
             }
             wolfBufCtx.putImageData(wolfImgData, 0, 0);
 
+            // ... (Keep the rest of the lock drawing logic the same) ...
             const lockOnRGB = hexToRgb(getCssVar('--lock-on'));
             const lockOffRGB = hexToRgb(getCssVar('--lock-off'));
             
-            // Draw locks overlay
             for(let x=0; x<512; x++) {
                 const lock = strip.locks[x];
                 if(lock === 1) { 
-                    // Green lock
-                    // If Ghost Mode, draw semi-transparent so we see simulation underneath
                     wolfBufCtx.fillStyle = strip.ghostMode 
                         ? `rgba(${lockOnRGB.r},${lockOnRGB.g},${lockOnRGB.b}, 0.4)`
                         : `rgb(${lockOnRGB.r},${lockOnRGB.g},${lockOnRGB.b})`;
-                        
-                    // Draw full height strip for ghost mode, or just top bar for normal
                     const h = strip.ghostMode ? 80 : 2;
                     wolfBufCtx.fillRect(x, 0, 1, h); 
                 } else if(lock === 2) { 
-                    // Red lock
                     wolfBufCtx.fillStyle = strip.ghostMode 
                         ? `rgba(${lockOffRGB.r},${lockOffRGB.g},${lockOffRGB.b}, 0.4)`
                         : `rgb(${lockOffRGB.r},${lockOffRGB.g},${lockOffRGB.b})`;
@@ -860,8 +950,8 @@
             }
 
             if(selectedHistoryIndex > 0) {
-                 wolfBufCtx.fillStyle = 'rgba(255, 255, 0, 0.4)';
-                 wolfBufCtx.fillRect(0, selectedHistoryIndex, 512, 1);
+                wolfBufCtx.fillStyle = getCssVar('--warn');
+                wolfBufCtx.fillRect(0, selectedHistoryIndex, 512, 1);
             }
 
             wolfCtx.fillStyle = getCssVar('--bg');
@@ -1315,7 +1405,7 @@
         });
 
         setTimeout(resetWorldCam, 100); 
-        buildRuleUI(); renderRulePresets(); renderMaskPresets(); initTotalisticUI();
+        buildRuleUI(); renderRulePresets(); renderMaskPresets(); initTotalisticUI(); updateAgeLUT();
         requestAnimationFrame(loop);
 
     </script>
