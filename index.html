@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CELLULAR AUTOMATOMATA V2</title>
+    <title>CELLULAR AUTOMATOMATA V2.1</title>
     <style>
         /* --- THEMES --- */
         :root {
@@ -101,7 +101,7 @@
         /* --- CANVAS AREAS --- */
         .world-wrapper {
             flex: 1;
-            background: var(--cell-dead); /* Matches canvas bg for seamless look */
+            background: var(--cell-dead);
             position: relative; 
             overflow: hidden;
             width: 100%;
@@ -120,7 +120,7 @@
         .wolfram-container {
             display: flex; gap: 0; 
             margin-top: 10px;
-            height: 80px; /* Locked height via CSS */
+            height: 80px; 
             background: var(--bg);
             border: 1px solid var(--border);
         }
@@ -152,8 +152,8 @@
         }
         
         input[type=range][orient=vertical] {
-            writing-mode: bt-lr; /* IE */
-            -webkit-appearance: slider-vertical; /* WebKit */
+            writing-mode: bt-lr; 
+            -webkit-appearance: slider-vertical;
             width: 100%; height: 100%; padding: 0; margin: 0;
             cursor: ns-resize;
         }
@@ -173,7 +173,7 @@
             z-index: 100;
         }
 
-        /* --- INSPECTOR OVERLAY (FIXED) --- */
+        /* --- INSPECTOR OVERLAY --- */
         .neighborhood-preview {
             position: absolute; 
             bottom: 10px; left: 10px;
@@ -210,6 +210,7 @@
         button.lock-btn:hover { background: rgba(74, 222, 128, 0.1); }
         button.icon-btn { padding: 4px 8px; font-size: 10px; }
         button.del-btn { border-color: var(--stop); color: var(--stop); background: transparent; }
+        button.exp-btn { border-color: var(--text); color: var(--text); background: transparent; margin-left: auto; margin-right: 5px;}
         
         input[type="range"] { width: 100%; cursor: pointer; }
         input[type="number"], input[type="text"], select {
@@ -242,11 +243,38 @@
             background: rgba(0,0,0,0.1);
         }
         .preset-item {
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; align-items: center;
             background: var(--panel); padding: 4px 8px; border-radius: 3px;
-            border: 1px solid transparent; cursor: pointer;
+            border: 1px solid transparent; 
         }
         .preset-item:hover { border-color: var(--accent); }
+        .preset-name { cursor: pointer; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* --- TOTALISTIC UI --- */
+        .tot-container { display: flex; flex-direction: column; gap: 4px; margin-top: 5px; }
+        .tot-row { display: flex; align-items: center; gap: 8px; }
+        .tot-label { font-weight: bold; width: 15px; color: var(--accent); font-size: 11px; }
+        .tot-bits { display: flex; flex: 1; gap: 2px; justify-content: space-between; }
+        
+        .t-btn {
+            flex: 1;
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 10px;
+            padding: 4px 0;
+            cursor: pointer;
+            border-radius: 3px;
+            user-select: none;
+        }
+        .t-btn:hover { border-color: var(--text-head); }
+        .t-btn.active { 
+            background: var(--accent); 
+            color: #fff; 
+            border-color: var(--accent);
+            box-shadow: 0 0 5px var(--accent-glow);
+        }
     </style>
 </head>
 <body>
@@ -255,7 +283,7 @@
 
     <div class="viewport">
         <div class="header">
-            <span style="font-weight:bold; color:var(--accent); font-size:1.1em; letter-spacing:1px;">CELLULAR AUTOMATOMATA V2</span>
+            <span style="font-weight:bold; color:var(--accent); font-size:1.1em; letter-spacing:1px;">CELLULAR AUTOMATOMATA V2.2</span>
             <div style="display:flex; gap:10px; align-items: center;">
                 <select id="themeSelect" onchange="setTheme(this.value)">
                     <option value="cyber">Theme: Cyber</option>
@@ -364,12 +392,40 @@
                  <button onclick="restoreHistory()" style="font-size:10px; width:100%">Restore Selected Row</button>
             </div>
 
+            <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top:10px; background:rgba(255,255,255,0.02); padding:10px; border-radius:4px;">
+                <div class="row">
+                    <h3 style="margin:0; font-size:11px; color:var(--text); text-transform: uppercase;">Generator: Totalistic</h3>
+                    <button onclick="applyTotalistic()" class="primary icon-btn">Apply to Gene</button>
+                </div>
+                
+                <div class="sub-text" style="margin-bottom:5px;">
+                    Generates mask based on neighbor counts.
+                </div>
+
+                <div class="tot-container">
+                    <div class="tot-row">
+                        <span class="tot-label">B</span>
+                        <div class="tot-bits" id="bornBits"></div>
+                    </div>
+                    <div class="tot-row">
+                        <span class="tot-label">S</span>
+                        <div class="tot-bits" id="surviveBits"></div>
+                    </div>
+                </div>
+
+                <div class="row" style="margin-top:8px; justify-content: flex-start; gap:5px; flex-wrap:wrap;">
+                    <button style="font-size:10px" onclick="setTotalistic('3','23')">Conway</button>
+                    <button style="font-size:10px" onclick="setTotalistic('36','23')">HighLife</button>
+                    <button style="font-size:10px" onclick="setTotalistic('3','12345')">Maze</button>
+                    <button style="font-size:10px" onclick="setTotalistic('34','34')">34 Life</button>
+                </div>
+            </div>
             <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top:10px;">
                 <div class="row">
                     <h3 style="margin:0; font-size:11px; color:var(--text)">Mask IO</h3>
                     <div style="display:flex; gap:5px">
-                        <button class="icon-btn" onclick="triggerImport()" title="Load JSON">Import</button>
-                        <button class="icon-btn" onclick="triggerExport()" title="Save JSON">Export</button>
+                        <button class="icon-btn" onclick="triggerImport()" title="Import Preset or Full Save">Import</button>
+                        <button class="icon-btn" onclick="triggerExportState()" title="Save Full State">Export State</button>
                     </div>
                 </div>
                 <div class="row" style="margin-top:8px">
@@ -818,16 +874,27 @@
 
         /* --- PRESETS & IO --- */
         let rulePresets = [{name: "Chaos", val: 30}, {name: "Fractal", val: 90}, {name: "Comp", val: 110}, {name: "Flow", val: 184}, {name: "Wall", val: 73}];
+        
         function renderRulePresets() {
             const list = document.getElementById('rulePresetList'); list.innerHTML = '';
             rulePresets.forEach((p, idx) => {
                 const item = document.createElement('div'); item.className = 'preset-item';
-                item.innerHTML = `<span class="preset-name" onclick="setRule(${p.val})">${p.name} (${p.val})</span><button class="icon-btn del-btn" onclick="deleteRulePreset(${idx})">×</button>`;
+                item.innerHTML = `
+                <span class="preset-name" onclick="setRule(${p.val})">${p.name} (${p.val})</span>
+                <button class="icon-btn exp-btn" onclick="exportRulePreset(${idx})" title="Export Rule">↓</button>
+                <button class="icon-btn del-btn" onclick="deleteRulePreset(${idx})" title="Delete">×</button>`;
                 list.appendChild(item);
             });
         }
         function saveRulePreset() { rulePresets.push({ name: document.getElementById('ruleNameInput').value.trim() || "Custom", val: ruleByte }); renderRulePresets(); }
         function deleteRulePreset(idx) { rulePresets.splice(idx, 1); renderRulePresets(); }
+        
+        // Export Rule Logic
+        function exportRulePreset(idx) {
+            const p = rulePresets[idx];
+            const data = { type: 'rule_preset', name: p.name, val: p.val };
+            downloadJSON(data, p.name + "_rule");
+        }
 
         let maskPresets = [{ name: "Conway GoL", data: generateConwayMask() }];
         function generateConwayMask() {
@@ -843,7 +910,10 @@
             const list = document.getElementById('maskPresetList'); list.innerHTML = '';
             maskPresets.forEach((p, idx) => {
                 const item = document.createElement('div'); item.className = 'preset-item';
-                item.innerHTML = `<span class="preset-name" onclick="loadMaskPreset(${idx})">${p.name}</span><button class="icon-btn del-btn" onclick="deleteMaskPreset(${idx})">×</button>`;
+                item.innerHTML = `
+                <span class="preset-name" onclick="loadMaskPreset(${idx})">${p.name}</span>
+                <button class="icon-btn exp-btn" onclick="exportMaskPreset(${idx})" title="Export Mask">↓</button>
+                <button class="icon-btn del-btn" onclick="deleteMaskPreset(${idx})" title="Delete">×</button>`;
                 list.appendChild(item);
             });
         }
@@ -853,22 +923,35 @@
             if(maskPresets[idx].name.includes("Conway") && !isStripPaused) toggleStripPause();
         }
         function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
+        
+        // Export Mask Logic
+        function exportMaskPreset(idx) {
+            const p = maskPresets[idx];
+            const data = { type: 'mask_preset', name: p.name, data: p.data };
+            downloadJSON(data, p.name + "_mask");
+        }
 
-        /* --- FILE IO --- */
-        function triggerExport() {
+        /* --- FILE IO UTILS --- */
+        function downloadJSON(data, filename) {
+            const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            // Sanitize filename
+            a.download = (filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()) + ".json";
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function triggerExportState() {
             const data = {
+                type: 'full_state',
                 cells: Array.from(strip.cells),
                 locks: Array.from(strip.locks),
                 rule: ruleByte,
                 timestamp: Date.now()
             };
-            const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `gene_preset_${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadJSON(data, "gene_state_" + Date.now());
         }
 
         function triggerImport() {
@@ -882,10 +965,26 @@
             reader.onload = (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
-                    strip.loadData(data);
-                    if(data.rule !== undefined) {
-                        setRule(data.rule);
-                        document.getElementById('ruleInput').value = data.rule;
+                    
+                    // Case 1: Rule Preset Import
+                    if (data.type === 'rule_preset') {
+                        rulePresets.push({ name: data.name, val: data.val });
+                        renderRulePresets();
+                        alert(`Imported Rule: ${data.name}`);
+                    }
+                    // Case 2: Mask Preset Import
+                    else if (data.type === 'mask_preset') {
+                        maskPresets.push({ name: data.name, data: data.data });
+                        renderMaskPresets();
+                        alert(`Imported Mask: ${data.name}`);
+                    }
+                    // Case 3: Full State Import (Fallback for legacy or explicit state)
+                    else {
+                        strip.loadData(data);
+                        if(data.rule !== undefined) {
+                            setRule(data.rule);
+                            document.getElementById('ruleInput').value = data.rule;
+                        }
                     }
                     // Reset file input so same file can be selected again if needed
                     input.value = '';
@@ -939,6 +1038,80 @@
             }
         }
 
+        /* --- TOTALISTIC / NEIGHBOR GENERATOR LOGIC --- */
+        let ruleBorn = [0,0,0,1,0,0,0,0,0]; // Default B3
+        let ruleSurvive = [0,0,1,1,0,0,0,0,0]; // Default S23
+
+        function initTotalisticUI() {
+            const createBtns = (arr, id, type) => {
+                const container = document.getElementById(id);
+                container.innerHTML = '';
+                for(let i=0; i<=8; i++) {
+                    const btn = document.createElement('div');
+                    btn.className = `t-btn ${arr[i] ? 'active' : ''}`;
+                    btn.innerText = i;
+                    btn.onclick = () => {
+                        arr[i] = !arr[i]; // Toggle
+                        btn.className = `t-btn ${arr[i] ? 'active' : ''}`;
+                    };
+                    container.appendChild(btn);
+                }
+            };
+            createBtns(ruleBorn, 'bornBits', 'B');
+            createBtns(ruleSurvive, 'surviveBits', 'S');
+        }
+
+        function setTotalistic(bStr, sStr) {
+            // Reset
+            ruleBorn.fill(0); ruleSurvive.fill(0);
+            
+            // Parse strings (e.g., "3", "23")
+            bStr.split('').forEach(c => ruleBorn[parseInt(c)] = 1);
+            sStr.split('').forEach(c => ruleSurvive[parseInt(c)] = 1);
+            
+            initTotalisticUI(); // Refresh UI
+            applyTotalistic();  // Auto-apply
+        }
+
+        function applyTotalistic() {
+            // 1. Pause the gene strip so it doesn't immediately overwrite our work
+            if(!isStripPaused) toggleStripPause();
+
+            // 2. Iterate through all 512 possible neighborhood configurations
+            for(let i=0; i<STRIP_LEN; i++) {
+                
+                // Decode the index into 9 bits (Moore Neighborhood)
+                // The simulation uses a specific bit order. 
+                // usually bit 4 is center, but we just need to separate center from the rest.
+                
+                const isCenterAlive = (i >> 4) & 1;
+                
+                let neighborCount = 0;
+                for(let bit=0; bit<9; bit++) {
+                    if(bit !== 4) { // Exclude center from neighbor count
+                        if( (i >> bit) & 1 ) neighborCount++;
+                    }
+                }
+
+                // 3. Apply Conway-style logic
+                let result = 0;
+                if(isCenterAlive) {
+                    if(ruleSurvive[neighborCount]) result = 1;
+                } else {
+                    if(ruleBorn[neighborCount]) result = 1;
+                }
+
+                // 4. Update the strip (Gene)
+                if(strip.ghostMode || strip.locks[i] === 0) {
+                     strip.cells[i] = result;
+                }
+            }
+
+            // 5. Update History & View
+            strip.resetHistory();
+            drawWolfram();
+        }
+
         /* --- MOUSE EVENTS --- */
         function attachCamEvents(canvas, cam, paintFn, hoverFn) {
             canvas.addEventListener('wheel', (e) => {
@@ -958,7 +1131,7 @@
                 cam.offsetY = internalY - (wPosBefore.y * cam.zoom);
                 cam.constrain(); 
                 drawWorld(); drawWolfram();
-            }, { passive: false }); // Add passive: false to ensure preventDefault works reliably
+            }, { passive: false }); 
 
             canvas.addEventListener('mousedown', (e) => {
                 const canPan = cam.zoom > (cam.minZoom + 0.001);
@@ -1021,7 +1194,6 @@
             const index = world.getNeighborhood(x, y);
 
             // --- OPTIMIZATION START ---
-            // If the index hasn't changed, don't redraw the DOM
             if (index === lastInspIndex && document.getElementById('nbPreview').style.display !== 'none') return;
             lastInspIndex = index;
             // --- OPTIMIZATION END ---
@@ -1086,6 +1258,18 @@
         /* --- LOOP --- */
         let lastTime = 0;
         function loop(time) {
+            if (keys.w || keys.a || keys.s || keys.d) {
+                const panSpeed = 10; // Adjust speed here (lower is smoother)
+                // Note: divide by cam.zoom if you want speed to stay consistent when zoomed in
+                const speed = panSpeed; 
+
+                if (keys.w) worldCam.offsetY += speed;
+                if (keys.s) worldCam.offsetY -= speed;
+                if (keys.a) worldCam.offsetX += speed;
+                if (keys.d) worldCam.offsetX -= speed;
+                
+                worldCam.constrain();
+            }
             if(lastMousePos.onWorld) updateInspector();
             if (!isPaused && time - lastTime > 1000 / fps) {
                 world.update(strip);
@@ -1101,9 +1285,37 @@
             drawWorld(); drawWolfram();
             requestAnimationFrame(loop);
         }
+        /* --- KEYBOARD STATE TRACKING --- */
+        const keys = { w: false, a: false, s: false, d: false };
+
+        window.addEventListener('keydown', (e) => {
+            // Ignore if typing in an input field
+            const tag = document.activeElement.tagName.toLowerCase();
+            if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+
+            // Spacebar (Toggle - instantaneous)
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePause();
+                return;
+            }
+
+            // WASD (State tracking)
+            if (e.code === 'KeyW') keys.w = true;
+            if (e.code === 'KeyA') keys.a = true;
+            if (e.code === 'KeyS') keys.s = true;
+            if (e.code === 'KeyD') keys.d = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW') keys.w = false;
+            if (e.code === 'KeyA') keys.a = false;
+            if (e.code === 'KeyS') keys.s = false;
+            if (e.code === 'KeyD') keys.d = false;
+        });
 
         setTimeout(resetWorldCam, 100); 
-        buildRuleUI(); renderRulePresets(); renderMaskPresets();
+        buildRuleUI(); renderRulePresets(); renderMaskPresets(); initTotalisticUI();
         requestAnimationFrame(loop);
 
     </script>
