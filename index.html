@@ -336,7 +336,7 @@
                 // Note: As t goes 0->1, we go from Alive Color -> Dead Color
                 // To keep it visible, we might want to stop slightly before full dead color,
                 // but fully fading looks smoother. Let's cap at 80% fade.
-                t = t * 0.85; 
+                t = t * 0.75; 
 
                 const r = lerp(alive.r, dead.r, t);
                 const g = lerp(alive.g, dead.g, t);
@@ -1196,7 +1196,7 @@
         });
 
         setTimeout(resetWorldCam, 100); 
-        buildRuleUI(); renderRulePresets(); renderMaskPresets(); initTotalisticUI(); updateAgeLUT();
+        buildRuleUI(); renderRulePresets(); renderMaskPresets(); initTotalisticUI(); updateAgeLUT(); toggleAgeMode(true)
         requestAnimationFrame(loop);
 
     </script>
