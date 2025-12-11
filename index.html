@@ -1012,6 +1012,9 @@
             }, { passive: false }); 
 
             canvas.addEventListener('mousedown', (e) => {
+                if(canvas.id === 'worldCanvas') {
+                    document.getElementById('themeSelect').blur();
+                }
                 const canPan = cam.zoom > (cam.minZoom + 0.001);
                 if((e.button === 1 || (e.button === 0 && e.code === 'Space')) && canPan) {
                     cam.isDragging = true; cam.lastX = e.clientX; cam.lastY = e.clientY;
