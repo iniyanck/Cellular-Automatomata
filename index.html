@@ -209,7 +209,10 @@
             <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top:10px; background:rgba(255,255,255,0.02); padding:10px; border-radius:4px;">
                 <div class="row">
                     <h3 style="margin:0; font-size:11px; color:var(--text); text-transform: uppercase;">Generator: Totalistic</h3>
-                    <button onclick="applyTotalistic()" class="primary icon-btn">Apply to Gene</button>
+                    <div style="display:flex; gap:5px">
+                        <button onclick="randomizeTotalistic()" title="Randomize Neighbors">RND</button>
+                        <button onclick="applyTotalistic()" class="primary icon-btn">Apply to Gene</button>
+                    </div>
                 </div>
                 
                 <div class="sub-text" style="margin-bottom:5px;">
@@ -988,6 +991,15 @@
             // 5. Update History & View
             strip.resetHistory();
             drawWolfram();
+        }
+
+        function randomizeTotalistic() {
+            for(let i=0; i<=8; i++) {
+                ruleBorn[i] = Math.random() > 0.5 ? 1 : 0;
+                ruleSurvive[i] = Math.random() > 0.5 ? 1 : 0;
+            }
+            initTotalisticUI();
+            applyTotalistic(); 
         }
 
         /* --- MOUSE EVENTS --- */
