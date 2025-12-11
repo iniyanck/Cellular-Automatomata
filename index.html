@@ -155,7 +155,13 @@
                     <button id="pauseStripBtn" style="border-color:var(--warn); color:var(--warn); background:transparent" onclick="toggleStripPause()">Pause Gene</button>
                 </div>
             </div>
-            
+            <div class="row" style="margin-bottom: 10px;">
+                <select id="mapModeSelect" onchange="setMappingMode(this.value)" style="width:100%">
+                    <option value="spatial">Map: Spatial (Hashed)</option>
+                    <option value="totalistic">Map: Totalistic (Life-like)</option>
+                    <option value="direct" selected>Map: Direct (Raw)</option>
+                </select>
+            </div>
             <div class="sub-text">
                 <strong>ZOOM:</strong> Scroll (at cursor) | <strong>PAN:</strong> Middle/Left Drag<br>
                 <strong>2D:</strong> Right Click Erase | <strong>GENE:</strong> Click toggles
@@ -299,6 +305,7 @@
         let lastInspIndex = -1;
         let showAge = false;
         let ageLUT = new Uint32Array(256); // Lookup table for colors
+        let currentMapMode = 'direct';
         
         /* --- HELPERS --- */
         function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -352,6 +359,12 @@
             document.documentElement.setAttribute('data-theme', themeName);
             updateAgeLUT();
             drawWorld(); drawWolfram();
+        }
+        function setMappingMode(val) {
+            currentMapMode = val;
+            // Optional: Clear world to see new physics immediately
+            // world.clear(); 
+            // world.randomize(); 
         }
 
         /* --- CAMERA CLASS --- */
@@ -578,7 +591,12 @@
 
                 for (let y = 0; y < h; y++) {
                     for (let x = 0; x < w; x++) {
-                        let index = 0; let bitPos = 8;
+                        // 1. Calculate Neighborhood & Totalistic Sums
+                        let index = 0;     
+                        let neighbors = 0; 
+                        let bitPos = 8;
+                        let centerSelf = 0; 
+
                         for (let dy = -1; dy <= 1; dy++) {
                             for (let dx = -1; dx <= 1; dx++) {
                                 let ny, nx, val = 0;
@@ -589,14 +607,41 @@
                                     ny = y + dy; nx = x + dx;
                                     if(ny >= 0 && ny < h && nx >= 0 && nx < w) val = d[ny * w + nx];
                                 }
-                                // CHANGE: Logic check > 0
-                                if (val > 0) index |= (1 << bitPos);
+
+                                if (val > 0) {
+                                    index |= (1 << bitPos); 
+                                    if (bitPos !== 4) neighbors++; 
+                                    else centerSelf = 1;
+                                }
                                 bitPos--;
                             }
                         }
-                        
-                        // Result is 1 (Alive) or 0 (Dead) based on the strip
-                        const result = ruleSet[index]; 
+
+                        // 2. Determine Lookup Index
+                        let lookupIndex = 0;
+
+                        if (currentMapMode === 'totalistic') {
+                            // Map 18 possible totalistic states (0-8 neighbors * 2 center states) to 512 bits
+                            // (neighbors + center*9) gives range 0-17. 
+                            // 512 / 18 ≈ 28.4 steps per state.
+                            let totalisticState = neighbors + (centerSelf * 9);
+                            lookupIndex = (totalisticState * 28) % 512;
+
+                        } else if (currentMapMode === 'spatial') {
+                            // "Patchwork" Spatial Mapping
+                            // Use coordinate hashing to create 16x16 blocks of consistent physics
+                            const xPhase = (x >> 4); 
+                            const yPhase = (y >> 4); 
+                            // Simple hash to scramble the offset
+                            const zoneOffset = ((xPhase * 57) ^ (yPhase * 13)) & 511;
+                            lookupIndex = (index + zoneOffset) & 511;
+
+                        } else {
+                            // Direct Mapping
+                            lookupIndex = index;
+                        }
+
+                        const result = ruleSet[lookupIndex];
                         const currentVal = d[y * w + x];
 
                         if (result === 1) {
@@ -791,7 +836,7 @@
         function saveRulePreset() { rulePresets.push({ name: document.getElementById('ruleNameInput').value.trim() || "Custom", val: ruleByte }); renderRulePresets(); }
         function deleteRulePreset(idx) { rulePresets.splice(idx, 1); renderRulePresets(); }
 
-        let maskPresets = [{ name: "Conway GoL", data: generateConwayMask() }];
+        let maskPresets = [{ name: "Conway GoL", data: generateConwayMask(), mode: 'direct' }];
         function generateConwayMask() {
             const mask = new Uint8Array(512);
             for(let i=0; i<512; i++) {
@@ -812,21 +857,41 @@
                 list.appendChild(item);
             });
         }
-        function saveMaskPreset() { maskPresets.push({ name: document.getElementById('maskNameInput').value.trim() || "Custom", data: Array.from(strip.cells) }); renderMaskPresets(); }
+        function saveMaskPreset() { maskPresets.push({ name: document.getElementById('maskNameInput').value.trim() || "Custom", data: Array.from(strip.cells), mode: currentMapMode}); renderMaskPresets(); }
         function loadMaskPreset(idx) {
+            const preset = maskPresets[idx];
             strip.loadMask(maskPresets[idx].data);
+            
+            if (preset.mode) {
+                currentMapMode = preset.mode;
+                // Update the Dropdown UI to match
+                const select = document.getElementById('mapModeSelect');
+                select.value = currentMapMode;
+            }
+
+            // Optional: If you want specific presets to force a mode, 
+            // you would need to store the mode in the preset object first.
+            // For now, we just ensure the simulation doesn't break.
+            
             if (!isStripPaused) {
                 toggleStripPause();
             }
             strip.resetHistory();
+            
+            // Force a re-draw of the gene so the user sees the new mask immediately
             drawWolfram(); 
+            
+            // IMPORTANT: Clear the world. 
+            // Switching masks usually invalidates the current 2D state, 
+            // leaving "debris" that follows old rules.
+            world.randomize(); 
         }
         function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
         
         // Export Mask Logic
         function exportMaskPreset(idx) {
             const p = maskPresets[idx];
-            const data = { type: 'mask_preset', name: p.name, data: p.data };
+            const data = { type: 'mask_preset', name: p.name, data: p.data, mode: p.mode };
             downloadJSON(data, p.name + "_mask");
         }
 
@@ -865,7 +930,7 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     if (data.type === 'mask_preset') {
-                        maskPresets.push({ name: data.name, data: data.data });
+                        maskPresets.push({ name: data.name, data: data.data, mode: data.mode });
                         renderMaskPresets();
                     }
                     input.value = '';
