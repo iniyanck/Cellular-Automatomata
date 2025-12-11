@@ -836,7 +836,20 @@
         function saveRulePreset() { rulePresets.push({ name: document.getElementById('ruleNameInput').value.trim() || "Custom", val: ruleByte }); renderRulePresets(); }
         function deleteRulePreset(idx) { rulePresets.splice(idx, 1); renderRulePresets(); }
 
-        let maskPresets = [{ name: "Conway GoL", data: generateConwayMask(), mode: 'direct' }];
+        let maskPresets = [{ 
+            name: "Conway GoL", 
+            data: generateConwayMask(), 
+            mode: 'direct',
+            // State Info
+            rule: 30,                 // Default 1D rule
+            wrap1d: true, 
+            wrap2d: true,             // GoL is usually played on a torus (wrapped)
+            density: 5,
+            delay: 1,
+            ghost: false,
+            born: [0,0,0,1,0,0,0,0,0],    // B3 (Born on 3 neighbors)
+            survive: [0,0,1,1,0,0,0,0,0]  // S23 (Survive on 2 or 3)
+        }];
         function generateConwayMask() {
             const mask = new Uint8Array(512);
             for(let i=0; i<512; i++) {
@@ -857,33 +870,78 @@
                 list.appendChild(item);
             });
         }
-        function saveMaskPreset() { maskPresets.push({ name: document.getElementById('maskNameInput').value.trim() || "Custom", data: Array.from(strip.cells), mode: currentMapMode}); renderMaskPresets(); }
+        function saveMaskPreset() {
+            maskPresets.push({
+                name: document.getElementById('maskNameInput').value.trim() || "Custom",
+                data: Array.from(strip.cells), // The mask pattern
+                
+                // --- ALL NEW STATE DATA ---
+                mode: currentMapMode,
+                rule: ruleByte,
+                wrap1d: document.getElementById('wrap1dCheck').checked,
+                wrap2d: document.getElementById('wrap2dCheck').checked,
+                density: document.getElementById('stripDensity').value,
+                delay: document.getElementById('geneDelayInput').value,
+                ghost: document.getElementById('ghostMaskCheck').checked,
+                // Save copies of the arrays so they don't change later
+                born: [...ruleBorn],     
+                survive: [...ruleSurvive] 
+            });
+            renderMaskPresets();
+        }
         function loadMaskPreset(idx) {
-            const preset = maskPresets[idx];
-            strip.loadMask(maskPresets[idx].data);
+            const p = maskPresets[idx];
             
-            if (preset.mode) {
-                currentMapMode = preset.mode;
-                // Update the Dropdown UI to match
-                const select = document.getElementById('mapModeSelect');
-                select.value = currentMapMode;
+            // 1. Load the Cell Data
+            strip.loadMask(p.data);
+
+            // 2. Load Map Mode
+            if (p.mode) {
+                currentMapMode = p.mode;
+                document.getElementById('mapModeSelect').value = currentMapMode;
             }
 
-            // Optional: If you want specific presets to force a mode, 
-            // you would need to store the mode in the preset object first.
-            // For now, we just ensure the simulation doesn't break.
-            
+            // 3. Load Elementary Rule (Rule 30, 90, etc)
+            if (p.rule !== undefined) {
+                setRule(p.rule); // Updates internal state and bit grid UI
+                document.getElementById('ruleInput').value = p.rule; // Update number input
+            }
+
+            // 4. Load Wrap Settings (1D and 2D)
+            if (p.wrap1d !== undefined) {
+                document.getElementById('wrap1dCheck').checked = p.wrap1d;
+                strip.setWrap(p.wrap1d);
+            }
+            if (p.wrap2d !== undefined) {
+                document.getElementById('wrap2dCheck').checked = p.wrap2d;
+                world.setWrap(p.wrap2d);
+            }
+
+            // 5. Load Inputs (Density & Delay)
+            if (p.density) document.getElementById('stripDensity').value = p.density;
+            if (p.delay) document.getElementById('geneDelayInput').value = p.delay;
+
+            // 6. Load Ghost Mode
+            if (p.ghost !== undefined) {
+                document.getElementById('ghostMaskCheck').checked = p.ghost;
+                strip.setGhost(p.ghost);
+            }
+
+            // 7. Load Totalistic (Life-like) Rules
+            if (p.born && p.survive) {
+                ruleBorn = [...p.born];
+                ruleSurvive = [...p.survive];
+                initTotalisticUI(); // Refreshes the B/S buttons
+            }
+
+            // --- Standard Reset Logic ---
             if (!isStripPaused) {
                 toggleStripPause();
             }
             strip.resetHistory();
             
-            // Force a re-draw of the gene so the user sees the new mask immediately
+            // Redraw everything
             drawWolfram(); 
-            
-            // IMPORTANT: Clear the world. 
-            // Switching masks usually invalidates the current 2D state, 
-            // leaving "debris" that follows old rules.
             world.randomize(); 
         }
         function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
