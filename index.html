@@ -139,8 +139,9 @@
         <div class="control-block">
             <div class="row">
                 <h2>Simulation</h2>
-                <div style="display:flex; gap:10px; align-items: center;">
-                    <span id="fpsDisplay" style="font-size:11px; opacity:0.7">30 FPS</span>
+                <div style="display:flex; gap:5px; align-items: center;">
+                    <span id="fpsDisplay" style="font-size:11px; opacity:0.7; margin-right:5px">30 FPS</span>
+                    <button class="icon-btn" onclick="stepWorld()" title="Step 1 Frame">Step</button>
                     <button id="pauseBtn" class="primary" onclick="togglePause()">STOP</button>
                 </div>
             </div>
@@ -150,8 +151,9 @@
         <div class="control-block">
             <div class="row">
                 <h2>Gene Strip (Mask)</h2>
-                <div style="display:flex; align-items:center; gap:10px;">
+                <div style="display:flex; align-items:center; gap:5px;">
                     <span id="genCount" style="font-size:11px; font-family:monospace">G:0</span>
+                    <button class="icon-btn" onclick="stepStrip()" title="Step 1 Gen">Step</button>
                     <button id="pauseStripBtn" style="border-color:var(--warn); color:var(--warn); background:transparent" onclick="toggleStripPause()">Pause Gene</button>
                 </div>
             </div>
@@ -1269,6 +1271,41 @@
 
         attachCamEvents(worldCvs, worldCam, paintWorldAction, hoverWorldAction);
         attachCamEvents(wolfCvs, wolfCam, paintStripAction, null);
+
+        /* --- STEP FUNCTIONS --- */
+        function stepWorld() {
+            // 1. Advance the 2D World
+            world.update(strip);
+
+            // 2. Handle synchronization with the Gene Strip
+            // Even when stepping manually, we respect the delay and the Strip Pause state
+            geneUpdateCounter++;
+            const delay = parseInt(document.getElementById('geneDelayInput').value) || 1;
+            
+            if(geneUpdateCounter >= delay) {
+                if(!isStripPaused) { 
+                    strip.evolve(); 
+                    document.getElementById('genCount').innerText = "G:" + strip.gen; 
+                } else { 
+                    strip.applyLocks(); 
+                }
+                geneUpdateCounter = 0;
+            }
+            
+            // 3. Redraw
+            drawWorld(); 
+            drawWolfram();
+        }
+
+        function stepStrip() {
+            // Manually force the Gene Strip to evolve, ignoring delays or pause state
+            strip.evolve();
+            document.getElementById('genCount').innerText = "G:" + strip.gen;
+            drawWolfram();
+            
+            // Reset the counter so the next automatic update doesn't happen instantly
+            geneUpdateCounter = 0; 
+        }
 
         /* --- LOOP --- */
         let lastTime = 0;
