@@ -945,11 +945,10 @@
             world.randomize(); 
         }
         function deleteMaskPreset(idx) { maskPresets.splice(idx, 1); renderMaskPresets(); }
-        
-        // Export Mask Logic
+
         function exportMaskPreset(idx) {
             const p = maskPresets[idx];
-            const data = { type: 'mask_preset', name: p.name, data: p.data, mode: p.mode };
+            const data = { type: 'mask_preset', ...p };
             downloadJSON(data, p.name + "_mask");
         }
 
@@ -959,7 +958,6 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Sanitize filename
             a.download = (filename.replace(/[^a-z0-9]/gi, '_').toLowerCase()) + ".json";
             a.click();
             URL.revokeObjectURL(url);
@@ -971,6 +969,7 @@
                 cells: Array.from(strip.cells),
                 locks: Array.from(strip.locks),
                 rule: ruleByte,
+                mode: currentMapMode,
                 timestamp: Date.now()
             };
             downloadJSON(data, "gene_state_" + Date.now());
@@ -988,7 +987,7 @@
                 try {
                     const data = JSON.parse(e.target.result);
                     if (data.type === 'mask_preset') {
-                        maskPresets.push({ name: data.name, data: data.data, mode: data.mode });
+                        maskPresets.push(data);
                         renderMaskPresets();
                     }
                     input.value = '';
